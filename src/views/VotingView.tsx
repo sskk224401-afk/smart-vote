@@ -41,7 +41,7 @@ export default function VotingView({ pollCode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
-  // فحص دقيق ومستمر لحالة المصادقة مع التحديث الفوري
+  // 1. التحقق من حالة تسجيل الدخول أولاً
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -50,6 +50,7 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsubscribe();
   }, []);
 
+  // 2. جلب بيانات الاستطلاع
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'polls', pollCode), (snap) => {
       if (!snap.exists()) {
@@ -71,6 +72,7 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsub();
   }, [pollCode]);
 
+  // 3. التحقق مما إذا كان المستخدم قد قام بالتصويت
   useEffect(() => {
     const checkUserVote = async () => {
       if (!currentUser) return;
@@ -118,7 +120,8 @@ export default function VotingView({ pollCode }: Props) {
     }
   };
 
-  if (authChecking || loading || !poll) {
+  // شاشة التحميل أثناء فحص الحساب
+  if (authChecking) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
         <Background />
@@ -127,6 +130,60 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
+  // 🔴 شاشة تسجيل الدخول المستقلة (تظهر بالكامل إذا لم يسجل الدخول، ولا يظهر خلفها أي شيء)
+  if (!currentUser) {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
+        <Background />
+        <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in z-10">
+          
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <ShieldCheck className="h-7 w-7" />
+          </div>
+
+          <h2 className="text-2xl font-bold mb-2 text-white">Sign in to SmartVote</h2>
+          <p className="text-gray-400 text-xs mb-8 leading-relaxed">
+            Use your Google account to continue. One vote per verified identity.
+          </p>
+          
+          <button
+            onClick={async () => {
+              try {
+                await signInWithPopup(auth, googleProvider);
+              } catch (err) {
+                console.error("خطأ في تسجيل الدخول:", err);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm cursor-pointer"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+              <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
+              <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
+            </svg>
+            Sign in with Google
+          </button>
+
+          <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+            <Lock className="h-3 w-3" /> Protected by end-to-end encryption
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // شاشة التحميل إذا كان جلب بيانات الاستطلاع مستمراً بعد تسجيل الدخول
+  if (loading || !poll) {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center bg-black">
+        <Background />
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+      </div>
+    );
+  }
+
+  // واجهة التصويت (تفتح فقط وحصرياً بعد نجاح تسجيل الدخول)
   const total = poll.votes1 + poll.votes2;
   const pct1 = total > 0 ? Math.round((poll.votes1 / total) * 100) : 0;
   const pct2 = total > 0 ? 100 - pct1 : 0;
@@ -135,49 +192,7 @@ export default function VotingView({ pollCode }: Props) {
   return (
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
-
-      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر حتماً إذا لم يوجد مستخدم مسجل */}
-      {!currentUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-          <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in">
-            
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <ShieldCheck className="h-7 w-7" />
-            </div>
-
-            <h2 className="text-2xl font-bold mb-2 text-white">Sign in to SmartVote</h2>
-            <p className="text-gray-400 text-xs mb-8 leading-relaxed">
-              Use your Google account to continue. One vote per verified identity.
-            </p>
-            
-            <button
-              onClick={async () => {
-                try {
-                  await signInWithPopup(auth, googleProvider);
-                } catch (err) {
-                  console.error("خطأ في تسجيل الدخول:", err);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm cursor-pointer"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
-                <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
-              </svg>
-              Sign in with Google
-            </button>
-
-            <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
-              <Lock className="h-3 w-3" /> Protected by end-to-end encryption
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* واجهة التصويت العادية للمستخدم المسجل */}
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 z-10 relative">
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-gray-400">التصويت المباشر</div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
