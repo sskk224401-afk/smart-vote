@@ -5,7 +5,7 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
   User,
   Users,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import Background from '@/components/Background';
 
@@ -41,8 +42,17 @@ export default function VotingView({ pollCode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
-  // 1. التحقق من حالة تسجيل الدخول أولاً
+  // إجبار تسجيل الدخول في كل مرة يتم فتح الرابط فيها
   useEffect(() => {
+    const enforceFreshLogin = async () => {
+      // لو دي أول مرة يفتح فيها الرابط في التبويب ده، اعمل تسجيل خروج فوراً
+      if (!sessionStorage.getItem('voting_session_started')) {
+        await signOut(auth);
+        sessionStorage.setItem('voting_session_started', 'true');
+      }
+    };
+    enforceFreshLogin();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setAuthChecking(false);
@@ -50,7 +60,6 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsubscribe();
   }, []);
 
-  // 2. جلب بيانات الاستطلاع
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'polls', pollCode), (snap) => {
       if (!snap.exists()) {
@@ -72,7 +81,6 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsub();
   }, [pollCode]);
 
-  // 3. التحقق مما إذا كان المستخدم قد قام بالتصويت
   useEffect(() => {
     const checkUserVote = async () => {
       if (!currentUser) return;
@@ -120,7 +128,6 @@ export default function VotingView({ pollCode }: Props) {
     }
   };
 
-  // شاشة التحميل أثناء فحص الحساب
   if (authChecking) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
@@ -130,7 +137,7 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
-  // 🔴 شاشة تسجيل الدخول المستقلة (تظهر بالكامل إذا لم يسجل الدخول، ولا يظهر خلفها أي شيء)
+  // 🔴 شاشة تسجيل الدخول الإجبارية
   if (!currentUser) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
@@ -149,6 +156,10 @@ export default function VotingView({ pollCode }: Props) {
           <button
             onClick={async () => {
               try {
+                // إجبار نافذة جوجل على إظهار الحسابات في كل مرة لزيادة الموثوقية
+                googleProvider.setCustomParameters({
+                  prompt: 'select_account'
+                });
                 await signInWithPopup(auth, googleProvider);
               } catch (err) {
                 console.error("خطأ في تسجيل الدخول:", err);
@@ -173,7 +184,7 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
-  // شاشة التحميل إذا كان جلب بيانات الاستطلاع مستمراً بعد تسجيل الدخول
+  // شاشة التحميل إذا كان جلب بيانات الاستطلاع مستمراً بعد الدخول
   if (loading || !poll) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
@@ -183,7 +194,6 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
-  // واجهة التصويت (تفتح فقط وحصرياً بعد نجاح تسجيل الدخول)
   const total = poll.votes1 + poll.votes2;
   const pct1 = total > 0 ? Math.round((poll.votes1 / total) * 100) : 0;
   const pct2 = total > 0 ? 100 - pct1 : 0;
@@ -195,9 +205,19 @@ export default function VotingView({ pollCode }: Props) {
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 z-10 relative">
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-gray-400">التصويت المباشر</div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
-            <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
-            <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
+          <div className="flex items-center gap-4">
+            {currentUser && (
+              <button
+                onClick={() => signOut(auth)}
+                className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition"
+              >
+                <LogOut className="h-3.5 w-3.5" /> تسجيل خروج
+              </button>
+            )}
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
+              <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
+              <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
+            </div>
           </div>
         </div>
 
