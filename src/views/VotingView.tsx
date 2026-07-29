@@ -5,7 +5,8 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+// تم تغيير الاستيراد هنا لاستخدام signInWithRedirect
+import { signInWithRedirect, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -42,7 +43,6 @@ export default function VotingView({ pollCode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
-  // إجبار تسجيل الدخول في كل مرة يتم فتح الرابط فيها
   useEffect(() => {
     const enforceFreshLogin = async () => {
       if (!sessionStorage.getItem('voting_session_started')) {
@@ -136,7 +136,6 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
-  // 🔴 شاشة تسجيل الدخول بالتصميم والألوان الموحدة
   if (!currentUser) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
@@ -155,7 +154,8 @@ export default function VotingView({ pollCode }: Props) {
                 googleProvider.setCustomParameters({
                   prompt: 'select_account'
                 });
-                await signInWithPopup(auth, googleProvider);
+                // استخدام التحويل المباشر لحل كل مشاكل الـ Vercel والموبايل
+                await signInWithRedirect(auth, googleProvider);
               } catch (err) {
                 console.error("خطأ في تسجيل الدخول:", err);
               }
