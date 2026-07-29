@@ -5,7 +5,7 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -15,7 +15,6 @@ import {
   User,
   Users,
   ShieldCheck,
-  LogOut,
 } from 'lucide-react';
 import Background from '@/components/Background';
 
@@ -42,7 +41,6 @@ export default function VotingView({ pollCode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
-  // التحقق الفوري والصارم من حالة تسجيل الدخول لمنع وميض الصفحة العادية
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
@@ -121,7 +119,6 @@ export default function VotingView({ pollCode }: Props) {
     }
   };
 
-  // 🔒 عرض شاشة التحميل لحين الانتهاء من فحص حالة المصادقة والبيانات
   if (authChecking || loading || !poll) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
@@ -140,7 +137,7 @@ export default function VotingView({ pollCode }: Props) {
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
 
-      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر دائماً للمستخدم غير المسجل */}
+      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول قبل رؤية صفحة التصويت */}
       {!currentUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
           <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in">
@@ -180,7 +177,7 @@ export default function VotingView({ pollCode }: Props) {
         </div>
       )}
 
-      {/* واجهة التصويت (تظهر فقط عند تسجيل الدخول بنجاح) */}
+      {/* واجهة التصويت (بدون شريط متسجل بـ) */}
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-gray-400">التصويت المباشر</div>
@@ -193,19 +190,6 @@ export default function VotingView({ pollCode }: Props) {
         <div className="mt-6 text-center">
           <h1 className="text-2xl font-bold sm:text-3xl">التصويت المباشر</h1>
           <p className="mt-1.5 text-sm text-gray-400">اختر مرشّحك</p>
-          
-          {currentUser && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-950/60 px-4 py-1.5 border border-emerald-500/30 text-emerald-400 text-xs">
-              <span>متسجل بـ: {currentUser.email}</span>
-              <button 
-                onClick={() => signOut(auth)}
-                className="mr-2 text-gray-400 hover:text-white transition cursor-pointer"
-                title="تسجيل الخروج"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
         </div>
 
         {error && (
