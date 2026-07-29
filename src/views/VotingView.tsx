@@ -124,7 +124,8 @@ export default function VotingView({ pollCode, onBack }: Props) {
         tx.update(pollRef, { [field]: newVotesCount });
         tx.set(voteRef, { candidate: which, votedAt: Date.now() });
 
-        if (newVotesCount > 0) {
+        // رجعناها تاني تشتغل كل 10 آلاف صوت
+        if (newVotesCount > 0 && newVotesCount % 10000 === 0) {
           reachedMilestone = true;
           milestoneVotes = newVotesCount;
           milestoneCandidate = which === 1 ? data.candidate1Name : data.candidate2Name;
@@ -402,4 +403,4 @@ function ResultBar({
       </div>
     </div>
   );
-} 
+}
