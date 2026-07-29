@@ -136,13 +136,13 @@ export default function VotingView({ pollCode, onBack }: Props) {
       if (reachedMilestone) {
         emailjs.send(
           'service_hjcm4oi',
-          'template_9t0z123',
+          'template_qvqjc5z',
           {
             candidate_name: milestoneCandidate,
             vote_count: milestoneVotes,
             poll_code: pollCode
           },
-          'YOUR_PUBLIC_KEY'
+          'OFElPX-mMUfZLyWMF'
         ).then(() => {
           console.log('تم إرسال إشعار الإيميل بنجاح!');
         }).catch((err) => {
@@ -402,4 +402,4 @@ function ResultBar({
       </div>
     </div>
   );
-}
+} 
