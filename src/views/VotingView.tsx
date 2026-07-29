@@ -124,8 +124,8 @@ export default function VotingView({ pollCode, onBack }: Props) {
         tx.update(pollRef, { [field]: newVotesCount });
         tx.set(voteRef, { candidate: which, votedAt: Date.now() });
 
-        if (newVotesCount > 0) { // مؤقت للتجربة بس 
-          reachedMilestone = true;
+        if (newVotesCount > 0) {         
+           reachedMilestone = true;
           milestoneVotes = newVotesCount;
           milestoneCandidate = which === 1 ? data.candidate1Name : data.candidate2Name;
         }
