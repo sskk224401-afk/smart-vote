@@ -5,7 +5,7 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -41,8 +41,9 @@ export default function VotingView({ pollCode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
+  // فحص دقيق ومستمر لحالة المصادقة مع التحديث الفوري
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setAuthChecking(false);
     });
@@ -84,14 +85,12 @@ export default function VotingView({ pollCode }: Props) {
   }, [pollCode, currentUser]);
 
   const handleVote = async (which: 1 | 2) => {
-    if (!currentUser || voted) return;
+    const user = auth.currentUser;
+    if (!user || voted) return;
 
     setVotingFor(which);
     setError(null);
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-      
       const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
       const alreadyVoted = (await getDoc(voteRef)).exists();
       if (alreadyVoted) {
@@ -137,7 +136,7 @@ export default function VotingView({ pollCode }: Props) {
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
 
-      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول قبل رؤية صفحة التصويت */}
+      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر حتماً إذا لم يوجد مستخدم مسجل */}
       {!currentUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
           <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in">
@@ -156,7 +155,7 @@ export default function VotingView({ pollCode }: Props) {
                 try {
                   await signInWithPopup(auth, googleProvider);
                 } catch (err) {
-                  console.error(err);
+                  console.error("خطأ في تسجيل الدخول:", err);
                 }
               }}
               className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm cursor-pointer"
@@ -177,7 +176,7 @@ export default function VotingView({ pollCode }: Props) {
         </div>
       )}
 
-      {/* واجهة التصويت (بدون شريط متسجل بـ) */}
+      {/* واجهة التصويت العادية للمستخدم المسجل */}
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-gray-400">التصويت المباشر</div>
