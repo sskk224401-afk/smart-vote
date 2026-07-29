@@ -33,17 +33,20 @@ type Props = {
   onBackHome: () => void;
 };
 
-export default function VotingView({ pollCode, onBackHome }: Props) {
+export default function VotingView({ pollCode }: Props) {
   const [poll, setPoll] = useState<PollData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
   const [voted, setVoted] = useState(false);
   const [votingFor, setVotingFor] = useState<1 | 2 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
+  // التحقق الفوري والصارم من حالة تسجيل الدخول لمنع وميض الصفحة العادية
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
+      setAuthChecking(false);
     });
     return () => unsubscribe();
   }, []);
@@ -83,9 +86,7 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
   }, [pollCode, currentUser]);
 
   const handleVote = async (which: 1 | 2) => {
-    if (!currentUser) return;
-
-    if (voted) return;
+    if (!currentUser || voted) return;
 
     setVotingFor(which);
     setError(null);
@@ -120,7 +121,8 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
     }
   };
 
-  if (loading || !poll) {
+  // 🔒 عرض شاشة التحميل لحين الانتهاء من فحص حالة المصادقة والبيانات
+  if (authChecking || loading || !poll) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
         <Background />
@@ -138,12 +140,11 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
 
-      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر فوق التصويت بدون أي أزرار لتخطيها */}
+      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر دائماً للمستخدم غير المسجل */}
       {!currentUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
           <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in">
             
-            {/* أيقونة الحماية */}
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
               <ShieldCheck className="h-7 w-7" />
             </div>
@@ -179,8 +180,8 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
         </div>
       )}
 
-      {/* محتوى صفحة التصويت في الخلفية */}
-      <div className={`mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 transition-all ${!currentUser ? 'filter blur-sm pointer-events-none select-none' : ''}`}>
+      {/* واجهة التصويت (تظهر فقط عند تسجيل الدخول بنجاح) */}
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-gray-400">التصويت المباشر</div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
