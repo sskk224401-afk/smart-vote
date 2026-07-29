@@ -45,7 +45,6 @@ export default function VotingView({ pollCode }: Props) {
   // إجبار تسجيل الدخول في كل مرة يتم فتح الرابط فيها
   useEffect(() => {
     const enforceFreshLogin = async () => {
-      // لو دي أول مرة يفتح فيها الرابط في التبويب ده، اعمل تسجيل خروج فوراً
       if (!sessionStorage.getItem('voting_session_started')) {
         await signOut(auth);
         sessionStorage.setItem('voting_session_started', 'true');
@@ -137,26 +136,22 @@ export default function VotingView({ pollCode }: Props) {
     );
   }
 
-  // 🔴 شاشة تسجيل الدخول الإجبارية
+  // 🔴 شاشة تسجيل الدخول بالتصميم والألوان الموحدة
   if (!currentUser) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
         <Background />
-        <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in z-10">
+        <div className="w-full max-w-md rounded-3xl bg-black/80 border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in z-10 backdrop-blur-xl">
           
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-            <ShieldCheck className="h-7 w-7" />
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <ShieldCheck className="h-8 w-8" />
           </div>
 
-          <h2 className="text-2xl font-bold mb-2 text-white">Sign in to SmartVote</h2>
-          <p className="text-gray-400 text-xs mb-8 leading-relaxed">
-            Use your Google account to continue. One vote per verified identity.
-          </p>
+          <h2 className="text-3xl font-bold mb-8 text-white">سجل في الإنتخابات</h2>
           
           <button
             onClick={async () => {
               try {
-                // إجبار نافذة جوجل على إظهار الحسابات في كل مرة لزيادة الموثوقية
                 googleProvider.setCustomParameters({
                   prompt: 'select_account'
                 });
@@ -165,7 +160,7 @@ export default function VotingView({ pollCode }: Props) {
                 console.error("خطأ في تسجيل الدخول:", err);
               }
             }}
-            className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
@@ -173,18 +168,17 @@ export default function VotingView({ pollCode }: Props) {
               <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
               <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
             </svg>
-            Sign in with Google
+            تسجيل الدخول بحساب جوجل
           </button>
 
-          <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
-            <Lock className="h-3 w-3" /> Protected by end-to-end encryption
+          <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-gray-500">
+            <Lock className="h-4 w-4" /> محمي بتشفير تام
           </div>
         </div>
       </div>
     );
   }
 
-  // شاشة التحميل إذا كان جلب بيانات الاستطلاع مستمراً بعد الدخول
   if (loading || !poll) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
