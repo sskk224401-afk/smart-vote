@@ -1,21 +1,22 @@
+import emailjs from '@emailjs/browser';
 import { useEffect, useState } from 'react';
-import {
-  doc,
-  getDoc,
-  onSnapshot,
-  runTransaction,
+import { 
+  doc, 
+  getDoc, 
+  onSnapshot, 
+  runTransaction 
 } from 'firebase/firestore';
-import { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
+import { signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
-import {
-  CheckCircle2,
-  Loader2,
-  Lock,
-  Trophy,
-  User,
-  Users,
-  ShieldCheck,
-  LogOut,
+import { 
+  CheckCircle2, 
+  Loader2, 
+  Lock, 
+  Trophy, 
+  User, 
+  Users, 
+  ShieldCheck, 
+  Share2 
 } from 'lucide-react';
 import Background from '@/components/Background';
 
@@ -30,10 +31,10 @@ type PollData = {
 
 type Props = {
   pollCode: string;
-  onBackHome: () => void;
+  onBack: () => void;
 };
 
-export default function VotingView({ pollCode }: Props) {
+export default function VotingView({ pollCode, onBack }: Props) {
   const [poll, setPoll] = useState<PollData | null>(null);
   const [loading, setLoading] = useState(true);
   const [authChecking, setAuthChecking] = useState(true);
@@ -61,15 +62,15 @@ export default function VotingView({ pollCode }: Props) {
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'polls', pollCode), (snap) => {
       if (!snap.exists()) {
-        setError('لم يعد الاستطلاع متاحاً.');
+        setError('رمز الاستطلاع غير موجود.');
         setLoading(false);
         return;
       }
-      const d = snap.data() as Partial<PollData>;
+      const d = snap.data() as PollData;
       setPoll({
-        candidate1Name: d.candidate1Name ?? 'المرشّح الأول',
+        candidate1Name: d.candidate1Name ?? 'المرشح الأول',
         candidate1Image: d.candidate1Image ?? '',
-        candidate2Name: d.candidate2Name ?? 'المرشّح الثاني',
+        candidate2Name: d.candidate2Name ?? 'المرشح الثاني',
         candidate2Image: d.candidate2Image ?? '',
         votes1: d.votes1 ?? 0,
         votes2: d.votes2 ?? 0,
@@ -107,20 +108,50 @@ export default function VotingView({ pollCode }: Props) {
         return;
       }
 
+      let reachedMilestone = false;
+      let milestoneVotes = 0;
+      let milestoneCandidate = '';
+
       await runTransaction(db, async (tx) => {
         const pollRef = doc(db, 'polls', pollCode);
         const pollSnap = await tx.get(pollRef);
         if (!pollSnap.exists()) throw new Error('not-found');
+        
         const data = pollSnap.data() as PollData;
         const field = which === 1 ? 'votes1' : 'votes2';
-        tx.update(pollRef, { [field]: (data[field] ?? 0) + 1 });
+        const newVotesCount = (data[field] ?? 0) + 1;
+        
+        tx.update(pollRef, { [field]: newVotesCount });
         tx.set(voteRef, { candidate: which, votedAt: Date.now() });
+
+        if (newVotesCount > 0) { // مؤقت للتجربة بس 
+          reachedMilestone = true;
+          milestoneVotes = newVotesCount;
+          milestoneCandidate = which === 1 ? data.candidate1Name : data.candidate2Name;
+        }
       });
 
       setVoted(true);
+
+      if (reachedMilestone) {
+        emailjs.send(
+          'service_hjcm4oi',
+          'template_9t0z123', // استبدل بـ Template ID الحقيقي
+          {
+            candidate_name: milestoneCandidate,
+            vote_count: milestoneVotes,
+            poll_code: pollCode
+          },
+          'YOUR_PUBLIC_KEY'   // استبدل بـ Public Key الحقيقي
+        ).then(() => {
+          console.log('تم إرسال إشعار الإيميل بنجاح!');
+        }).catch((err) => {
+          console.error('فشل إرسال الإيميل:', err);
+        });
+      }
     } catch (err: any) {
       console.error("تفاصيل خطأ التصويت:", err);
-      setError(`خطأ: ${err.message || 'تعذّر تسجيل صوتك'}`);
+      setError(`خطأ أثناء تسجيل صوتك: ${err.message || ''}`);
     } finally {
       setVotingFor(null);
     }
@@ -130,7 +161,7 @@ export default function VotingView({ pollCode }: Props) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black">
         <Background />
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
       </div>
     );
   }
@@ -139,46 +170,36 @@ export default function VotingView({ pollCode }: Props) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
         <Background />
-        <div className="w-full max-w-md rounded-3xl bg-black/80 border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in z-10 backdrop-blur-xl">
-          
+        <div className="w-full max-w-md rounded-3xl bg-black/80 border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in-backdrop-blur-xl">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <ShieldCheck className="h-8 w-8" />
           </div>
-
-          <h2 className="text-3xl font-bold mb-8 text-white">سجل في الإنتخابات</h2>
-          
+          <h2 className="text-3xl font-bold mb-8 text-white">تسجيل الدخول للمصداقية</h2>
           <button
             onClick={async () => {
               try {
-                googleProvider.setCustomParameters({
-                  prompt: 'select_account'
-                });
+                googleProvider.setCustomParameters({ prompt: 'select_account' });
                 await signInWithPopup(auth, googleProvider);
               } catch (err: any) {
                 console.error("خطأ في تسجيل الدخول:", err);
-                setError(err.message || 'حدث خطأ أثناء تسجيل الدخول');
+                setError(`تعذر حتمًا تسجيل الدخول: ${err.message || ''}`);
               }
             }}
             className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
-              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
-              <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
-              <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
+              <path fill="#4285F4" d="M23.5 12.27c0-.82-.07-1.64-.21-2.43H12v4.63h6.51c-.28 1.48-1.12 2.73-2.4 3.58v2.97h3.88c2.27-2.09 3.51-5.17 3.51-8.75z" />
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-2.97c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.15v3.07C3.15 21.31 7.25 24 12 24z" />
+              <path fill="#FBBC05" d="M5.28 14.35c-.25-.72-.39-1.49-.39-2.35s.14-1.63.39-2.35V6.58H1.15C.42 8.04 0 9.97 0 12s.42 3.96 1.15 5.42l4.13-3.07z" />
+              <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.18 15.24 0 12 0 7.25 0 3.15 2.69 1.15 6.58l4.13 3.07c.95-2.83 3.6-4.9 6.72-4.9z" />
             </svg>
             تسجيل الدخول بحساب جوجل
           </button>
-
           {error && (
             <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
               {error}
             </div>
           )}
-
-          <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-gray-500">
-            <Lock className="h-4 w-4" /> محمي بتشفير تام
-          </div>
         </div>
       </div>
     );
@@ -201,38 +222,33 @@ export default function VotingView({ pollCode }: Props) {
   return (
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 z-10 relative">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm text-gray-400">التصويت المباشر</div>
-          <div className="flex items-center gap-4">
-            {currentUser && (
-              <button
-                onClick={() => signOut(auth)}
-                className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition"
-              >
-                <LogOut className="h-3.5 w-3.5" /> تسجيل خروج
-              </button>
-            )}
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
-              <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
-              <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
-            </div>
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 am:px-6 z-10 relative">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => signOut(auth)}
+            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition"
+          >
+            تسجيل خروج
+          </button>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-xl px-3 py-1.5 backdrop-blur-xl">
+            <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
+            <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
           </div>
         </div>
 
-        <div className="mt-6 text-center">
-          <h1 className="text-2xl font-bold sm:text-3xl">التصويت المباشر</h1>
-          <p className="mt-1.5 text-sm text-gray-400">اختر مرشّحك</p>
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-bold text-white">التصويت المباشر</h1>
+          <p className="mt-1.5 text-xs text-gray-400">اختر مرشحك، صوت واحد لكل مستخدم.</p>
         </div>
 
         {error && (
-          <div className="mx-auto mt-4 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
+          <div className="mx-auto mt-4 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
             {error}
           </div>
         )}
 
         {voted && (
-          <div className="mx-auto mt-6 flex max-w-md items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
+          <div className="mx-auto mt-6 flex max-w-md items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             تم تسجيل صوتك بنجاح، شكراً لمشاركتك
           </div>
@@ -291,7 +307,7 @@ export default function VotingView({ pollCode }: Props) {
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500">
           <Lock className="h-3.5 w-3.5" />
-          النتائج تتحدّث لحظياً. صوت واحد لكل مستخدم.
+          التصويت مشفر لحظياً، صوت واحد لكل مستخدم
         </div>
       </div>
     </div>
@@ -315,43 +331,40 @@ function CandidateCard({
   onVote: () => void;
   color: 'emerald' | 'blue';
 }) {
-  const styles =
-    color === 'emerald'
-      ? {
-          ring: isLeader ? 'border-emerald-400/50' : 'border-white/10',
-          btn: 'bg-emerald-600 hover:bg-emerald-500 text-white',
-        }
-      : {
-          ring: isLeader ? 'border-blue-400/50' : 'border-white/10',
-          btn: 'bg-blue-600 hover:bg-blue-500 text-white',
-        };
+  const styles = color === 'emerald'
+    ? {
+        ring: isLeader ? 'border-emerald-500/50' : 'border-white/10',
+        btn: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+      }
+    : {
+        ring: isLeader ? 'border-blue-500/50' : 'border-white/10',
+        btn: 'bg-blue-600 hover:bg-blue-500 text-white',
+      };
 
   return (
     <div className={`group relative overflow-hidden rounded-2xl border bg-black/40 backdrop-blur-xl p-4 flex flex-col justify-between ${styles.ring}`}>
-      <div>
-        <div className="relative aspect-video rounded-xl overflow-hidden mb-4 bg-gray-900">
-          {image ? (
-            <img src={image} alt={name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gray-800">
-              <User className="h-12 w-12 text-gray-500" />
-            </div>
-          )}
-        </div>
-        {isLeader && (
-          <div className="absolute right-6 top-6 flex items-center gap-1 rounded-full bg-black/80 px-2.5 py-1 text-xs font-bold text-emerald-400 backdrop-blur">
-            <Trophy className="h-3.5 w-3.5" /> الصدارة
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900">
+        {image ? (
+          <img src={image} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gray-800">
+            <User className="h-12 w-12 text-gray-500" />
           </div>
         )}
-        <h3 className="text-xl font-bold text-center mb-4">{name}</h3>
+        {isLeader && (
+          <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/80 px-2.5 py-1 text-xs font-bold text-emerald-400 backdrop-blur">
+            <Trophy className="h-3.5 w-3.5" /> المتصدر
+          </div>
+        )}
       </div>
+      <h3 className="text-xl font-bold text-center mb-4">{name}</h3>
       <button
         onClick={onVote}
         disabled={disabled || isVoting}
         className={`w-full py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${styles.btn} disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {isVoting ? <Loader2 className="h-5 w-5 animate-spin" /> : disabled ? <CheckCircle2 className="h-5 w-5" /> : <Trophy className="h-5 w-5" />}
-        {isVoting ? 'جارٍ التسجيل…' : disabled ? 'تم التصويت' : 'صوّت لهذا المرشّح'}
+        {isVoting ? 'جاري التسجيل' : disabled ? 'تم التصويت' : 'صوت لهذا المرشح'}
       </button>
     </div>
   );
@@ -377,7 +390,7 @@ function ResultBar({
     <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-xl p-4">
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className={`font-semibold ${isLeader ? text : 'text-white'}`}>
-          {isLeader && <Trophy className="ml-1 inline h-3.5 w-3.5" />}
+          {isLeader && <Trophy className="mr-1 inline h-3.5 w-3.5" />}
           {name}
         </span>
         <span className="text-gray-400">
