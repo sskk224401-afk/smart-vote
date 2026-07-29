@@ -5,8 +5,7 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-// تم تغيير الاستيراد هنا لاستخدام signInWithRedirect
-import { signInWithRedirect, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -154,10 +153,10 @@ export default function VotingView({ pollCode }: Props) {
                 googleProvider.setCustomParameters({
                   prompt: 'select_account'
                 });
-                // استخدام التحويل المباشر لحل كل مشاكل الـ Vercel والموبايل
-                await signInWithRedirect(auth, googleProvider);
-              } catch (err) {
+                await signInWithPopup(auth, googleProvider);
+              } catch (err: any) {
                 console.error("خطأ في تسجيل الدخول:", err);
+                setError(err.message || 'حدث خطأ أثناء تسجيل الدخول');
               }
             }}
             className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer"
@@ -170,6 +169,12 @@ export default function VotingView({ pollCode }: Props) {
             </svg>
             تسجيل الدخول بحساب جوجل
           </button>
+
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
+              {error}
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-gray-500">
             <Lock className="h-4 w-4" /> محمي بتشفير تام
