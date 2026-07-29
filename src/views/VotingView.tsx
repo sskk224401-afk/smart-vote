@@ -124,8 +124,8 @@ export default function VotingView({ pollCode, onBack }: Props) {
         tx.update(pollRef, { [field]: newVotesCount });
         tx.set(voteRef, { candidate: which, votedAt: Date.now() });
 
-        if (newVotesCount > 0) {         
-           reachedMilestone = true;
+        if (newVotesCount > 0) {
+          reachedMilestone = true;
           milestoneVotes = newVotesCount;
           milestoneCandidate = which === 1 ? data.candidate1Name : data.candidate2Name;
         }
@@ -136,13 +136,13 @@ export default function VotingView({ pollCode, onBack }: Props) {
       if (reachedMilestone) {
         emailjs.send(
           'service_hjcm4oi',
-          'template_9t0z123', // استبدل بـ Template ID الحقيقي
+          'template_9t0z123',
           {
             candidate_name: milestoneCandidate,
             vote_count: milestoneVotes,
             poll_code: pollCode
           },
-          'YOUR_PUBLIC_KEY'   // استبدل بـ Public Key الحقيقي
+          'YOUR_PUBLIC_KEY'
         ).then(() => {
           console.log('تم إرسال إشعار الإيميل بنجاح!');
         }).catch((err) => {
@@ -230,7 +230,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
           >
             تسجيل خروج
           </button>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-xl px-3 py-1.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-xl px-3 py-1.5">
             <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
             <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
           </div>
