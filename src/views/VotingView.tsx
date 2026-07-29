@@ -83,21 +83,16 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
   }, [pollCode, currentUser]);
 
   const handleVote = async (which: 1 | 2) => {
-    if (!currentUser) {
-      try {
-        await signInWithPopup(auth, googleProvider);
-      } catch (err) {
-        console.error(err);
-        return;
-      }
-    }
+    if (!currentUser) return;
 
-    if (voted || !auth.currentUser) return;
+    if (voted) return;
 
     setVotingFor(which);
     setError(null);
     try {
       const user = auth.currentUser;
+      if (!user) return;
+      
       const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
       const alreadyVoted = (await getDoc(voteRef)).exists();
       if (alreadyVoted) {
@@ -140,13 +135,13 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
   const leader = poll.votes1 === poll.votes2 ? null : poll.votes1 > poll.votes2 ? 1 : 2;
 
   return (
-    <div className="relative min-h-screen text-white bg-black">
+    <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
 
-      {/* 🔒 نافذة منبثقة لتسجيل الدخول تطابق تماماً التصميم المطلوب إذا لم يكن المستخدم مسجلاً */}
+      {/* 🔒 نافذة منبثقة إجبارية لتسجيل الدخول تظهر فوق التصويت بدون أي أزرار لتخطيها */}
       {!currentUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in">
             
             {/* أيقونة الحماية */}
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
@@ -166,7 +161,7 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
                   console.error(err);
                 }
               }}
-              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm"
+              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm cursor-pointer"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
@@ -180,23 +175,14 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
             <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
               <Lock className="h-3 w-3" /> Protected by end-to-end encryption
             </div>
-
-            <button
-              onClick={onBackHome}
-              className="mt-5 text-xs text-gray-400 hover:text-white transition block mx-auto underline"
-            >
-              العودة للرئيسية
-            </button>
           </div>
         </div>
       )}
 
-      {/* محتوى صفحة التصويت */}
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
+      {/* محتوى صفحة التصويت في الخلفية */}
+      <div className={`mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 transition-all ${!currentUser ? 'filter blur-sm pointer-events-none select-none' : ''}`}>
         <div className="flex items-center justify-between mb-4">
-          <button onClick={onBackHome} className="text-sm text-gray-400 hover:text-white transition">
-            ← الرئيسية
-          </button>
+          <div className="text-sm text-gray-400">التصويت المباشر</div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur-xl">
             <span className="text-xs text-gray-400">رمز الاستطلاع:</span>
             <span className="font-mono text-sm font-bold text-emerald-400">{pollCode}</span>
@@ -212,7 +198,7 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
               <span>متسجل بـ: {currentUser.email}</span>
               <button 
                 onClick={() => signOut(auth)}
-                className="mr-2 text-gray-400 hover:text-white transition"
+                className="mr-2 text-gray-400 hover:text-white transition cursor-pointer"
                 title="تسجيل الخروج"
               >
                 <LogOut className="h-3.5 w-3.5" />
