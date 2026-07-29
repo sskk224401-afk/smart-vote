@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/firebase';
 import { Loader2 } from 'lucide-react';
 import Background from '@/components/Background';
@@ -16,10 +16,7 @@ export default function App() {
   const [pollCode, setPollCode] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        signInAnonymously(auth).catch(() => {});
-      }
+    const unsub = onAuthStateChanged(auth, () => {
       setAuthReady(true);
     });
     return () => unsub();
