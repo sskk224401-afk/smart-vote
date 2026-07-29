@@ -175,7 +175,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <ShieldCheck className="h-8 w-8" />
           </div>
-          <h2 className="text-3xl font-bold mb-8 text-white">تسجيل الدخول للمصداقية</h2>
+          <h2 className="text-3xl font-bold mb-8 text-white">سجل في الإنتخابات</h2>         
           <button
             onClick={async () => {
               try {
