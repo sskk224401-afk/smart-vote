@@ -106,6 +106,8 @@ export default function VotingView({ pollCode }: Props) {
     } catch (err: any) {
       console.error("تفاصيل خطأ التصويت:", err);
       setError(`خطأ: ${err.message || 'تعذّر تسجيل صوتك'}`);
+    } finally {
+      setVotingFor(null);
     }
   };
 
