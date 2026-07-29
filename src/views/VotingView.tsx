@@ -5,7 +5,7 @@ import {
   onSnapshot,
   runTransaction,
 } from 'firebase/firestore';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signOut } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import {
   CheckCircle2,
@@ -14,6 +14,8 @@ import {
   Trophy,
   User,
   Users,
+  ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import Background from '@/components/Background';
 
@@ -37,11 +39,11 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
   const [voted, setVoted] = useState(false);
   const [votingFor, setVotingFor] = useState<1 | 2 | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [, setUser] = useState(auth.currentUser);
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
     });
     return () => unsubscribe();
   }, []);
@@ -69,36 +71,33 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
 
   useEffect(() => {
     const checkUserVote = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+      if (!currentUser) return;
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid, 'voted_polls', pollCode));
+        const snap = await getDoc(doc(db, 'users', currentUser.uid, 'voted_polls', pollCode));
         if (snap.exists()) setVoted(true);
       } catch (e) {
         console.error(e);
       }
     };
     checkUserVote();
-  }, [pollCode, auth.currentUser]);
+  }, [pollCode, currentUser]);
 
   const handleVote = async (which: 1 | 2) => {
-    if (voted) return;
-
-    let user = auth.currentUser;
-    if (!user) {
+    if (!currentUser) {
       try {
-        const result = await signInWithPopup(auth, googleProvider);
-        user = result.user;
+        await signInWithPopup(auth, googleProvider);
       } catch (err) {
-        console.error("خطأ تسجيل الدخول:", err);
-        setError('يجب تسجيل الدخول بحساب جوجل لإتمام التصويت');
+        console.error(err);
         return;
       }
     }
 
+    if (voted || !auth.currentUser) return;
+
     setVotingFor(which);
     setError(null);
     try {
+      const user = auth.currentUser;
       const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
       const alreadyVoted = (await getDoc(voteRef)).exists();
       if (alreadyVoted) {
@@ -128,7 +127,7 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
 
   if (loading || !poll) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center">
+      <div className="relative flex min-h-screen items-center justify-center bg-black">
         <Background />
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
@@ -141,9 +140,58 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
   const leader = poll.votes1 === poll.votes2 ? null : poll.votes1 > poll.votes2 ? 1 : 2;
 
   return (
-    <div className="relative min-h-screen text-white">
+    <div className="relative min-h-screen text-white bg-black">
       <Background />
 
+      {/* 🔒 نافذة منبثقة لتسجيل الدخول تطابق تماماً التصميم المطلوب إذا لم يكن المستخدم مسجلاً */}
+      {!currentUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-3xl bg-[#0d131a] border border-white/10 p-8 text-center shadow-2xl relative">
+            
+            {/* أيقونة الحماية */}
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <ShieldCheck className="h-7 w-7" />
+            </div>
+
+            <h2 className="text-2xl font-bold mb-2 text-white">Sign in to SmartVote</h2>
+            <p className="text-gray-400 text-xs mb-8 leading-relaxed">
+              Use your Google account to continue. One vote per verified identity.
+            </p>
+            
+            <button
+              onClick={async () => {
+                try {
+                  await signInWithPopup(auth, googleProvider);
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-medium transition shadow-lg text-sm"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
+                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
+                <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
+              </svg>
+              Sign in with Google
+            </button>
+
+            <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+              <Lock className="h-3 w-3" /> Protected by end-to-end encryption
+            </div>
+
+            <button
+              onClick={onBackHome}
+              className="mt-5 text-xs text-gray-400 hover:text-white transition block mx-auto underline"
+            >
+              العودة للرئيسية
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* محتوى صفحة التصويت */}
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6">
         <div className="flex items-center justify-between mb-4">
           <button onClick={onBackHome} className="text-sm text-gray-400 hover:text-white transition">
@@ -158,33 +206,18 @@ export default function VotingView({ pollCode, onBackHome }: Props) {
         <div className="mt-6 text-center">
           <h1 className="text-2xl font-bold sm:text-3xl">التصويت المباشر</h1>
           <p className="mt-1.5 text-sm text-gray-400">اختر مرشّحك</p>
-        </div>
-
-        {/* زر تسجيل الدخول بحساب جوجل */}
-        <div className="mt-6 flex justify-center">
-          {auth.currentUser ? (
-            <div className="flex items-center gap-2 rounded-full bg-emerald-950/60 px-4 py-1.5 border border-emerald-500/30 text-emerald-400 text-sm">
-              <span>متسجل بـ: {auth.currentUser.displayName || auth.currentUser.email}</span>
+          
+          {currentUser && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-950/60 px-4 py-1.5 border border-emerald-500/30 text-emerald-400 text-xs">
+              <span>متسجل بـ: {currentUser.email}</span>
+              <button 
+                onClick={() => signOut(auth)}
+                className="mr-2 text-gray-400 hover:text-white transition"
+                title="تسجيل الخروج"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
             </div>
-          ) : (
-            <button
-              onClick={async () => {
-                try {
-                  await signInWithPopup(auth, googleProvider);
-                } catch (err) {
-                  console.error(err);
-                }
-              }}
-              className="flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-white text-sm font-medium transition border border-white/10 shadow-lg"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.1 8.9 5 12 5z"/>
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
-                <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5.3L1.6 15c1.9 3.8 5.8 8 10.4 8z"/>
-              </svg>
-              تسجيل الدخول بحساب جوجل أولاً
-            </button>
           )}
         </div>
 
