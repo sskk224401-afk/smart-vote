@@ -103,11 +103,9 @@ export default function VotingView({ pollCode }: Props) {
       });
 
       setVoted(true);
-    } catch (err) {
-      console.error(err);
-      setError('تعذّر تسجيل صوتك. تحقق من اتصال الإنترنت.');
-    } finally {
-      setVotingFor(null);
+    } catch (err: any) {
+      console.error("تفاصيل خطأ التصويت:", err);
+      setError(`خطأ: ${err.message || 'تعذّر تسجيل صوتك'}`);
     }
   };
 
