@@ -1,137 +1,262 @@
-import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/firebase';
-import {
-  ArrowRight,
-  KeyRound,
-  Lock,
-  ShieldCheck,
-  Mail,
-  Loader2,
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { db } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { Trophy, Upload, Image as ImageIcon, CheckCircle2, Loader2, KeyRound } from 'lucide-react';
 import Background from '@/components/Background';
 
-type Props = {
-  onSuccess: () => void;
-  onBackHome: () => void;
+// 1. دالة ضغط الصور وتحويلها لـ Base64 بدقة عالية وحجم خفيف
+const compressAndConvertToBase64 = (
+  file: File, 
+  maxWidth = 800, 
+  quality = 0.7
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('فشل الوصول لـ Canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedBase64);
+      };
+
+      img.onerror = (err) => reject(err);
+    };
+
+    reader.onerror = (err) => reject(err);
+  });
 };
 
-export default function AdminLoginView({ onSuccess, onBackHome }: Props) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
-  const [shake, setShake] = useState(false);
+export default function AdminView() {
+  const [pollCode, setPollCode] = useState('');
+  const [candidate1Name, setCandidate1Name] = useState('');
+  const [candidate1Image, setCandidate1Image] = useState('');
+  const [candidate2Name, setCandidate2Name] = useState('');
+  const [candidate2Image, setCandidate2Image] = useState('');
+  
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) return;
-
-    setLoading(true);
-    setError(false);
+  // دالة التعامل مع رفع واختيار الصور
+  const handleImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    candidateNumber: 1 | 2
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     try {
-      // الاتصال بسيرفر فايربيز للتحقق من البيانات
-      await signInWithEmailAndPassword(auth, email, password);
-      onSuccess();
+      setLoading(true);
+      setError(null);
+      // ضغط الصورة وتحويلها
+      const base64 = await compressAndConvertToBase64(file);
+      
+      if (candidateNumber === 1) {
+        setCandidate1Image(base64);
+      } else {
+        setCandidate2Image(base64);
+      }
     } catch (err) {
-      setError(true);
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
+      console.error("خطأ معالجة الصورة:", err);
+      setError('حدث خطأ أثناء معالجة الصورة، حاول اختيار صورة أخرى.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // توليد رمز استطلاع عشوائي
+  const generateRandomCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setPollCode(code);
+  };
+
+  // حفظ الاستطلاع في Firestore
+  const handleCreatePoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pollCode || !candidate1Name || !candidate2Name) {
+      setError('يرجى ملء كافة البيانات المطلوبة.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const pollRef = doc(db, 'polls', pollCode);
+      await setDoc(pollRef, {
+        candidate1Name,
+        candidate1Image,
+        candidate2Name,
+        candidate2Image,
+        votes1: 0,
+        votes2: 0,
+        createdAt: Date.now()
+      });
+
+      setSuccess(true);
+    } catch (err: any) {
+      console.error("خطأ حفظ الاستطلاع:", err);
+      setError(`فشل إنشاء الاستطلاع: ${err.message || ''}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center p-4">
+    <div className="relative min-h-screen text-white bg-black p-4 flex items-center justify-center">
       <Background />
-      <div className="relative z-10 w-full max-w-md animate-fade-up">
-        {/* زر الرجوع */}
-        <button
-          onClick={onBackHome}
-          className="mb-8 flex items-center gap-2 text-gray-400 transition-colors hover:text-white"
-        >
-          <ArrowRight className="h-5 w-5" />
-          رجوع للرئيسية
-        </button>
+      
+      <div className="w-full max-w-2xl rounded-3xl bg-black/80 border border-white/10 p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative z-10">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <Trophy className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-bold">إنشاء استطلاع جديد</h1>
+          <p className="text-xs text-gray-400 mt-1">أدخل أسماء وصور المرشحين وسيتم ضغط الصور وحفظها تلقائياً.</p>
+        </div>
 
-        {/* لوحة تسجيل الدخول */}
-        <div className="rounded-3xl border border-white/10 bg-ink-900/80 p-8 shadow-2xl backdrop-blur-xl">
-          <div className="mb-6 flex justify-center">
-            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/20 p-4">
-              <ShieldCheck className="h-10 w-10 text-emerald-400" />
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
+            {error}
+          </div>
+        )}
+
+        {success ? (
+          <div className="text-center py-8 space-y-4">
+            <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto" />
+            <h2 className="text-xl font-bold text-white">تم إنشاء الاستطلاع بنجاح!</h2>
+            <p className="text-sm text-gray-400">رمز المشاركة الخاص بالاستطلاع هو:</p>
+            <div className="inline-block bg-emerald-500/10 border border-emerald-500/30 px-6 py-2.5 rounded-2xl font-mono text-2xl font-bold text-emerald-400 tracking-wider">
+              {pollCode}
+            </div>
+            <div>
+              <button
+                onClick={() => {
+                  setSuccess(false);
+                  setPollCode('');
+                  setCandidate1Name('');
+                  setCandidate1Image('');
+                  setCandidate2Name('');
+                  setCandidate2Image('');
+                }}
+                className="mt-4 px-6 py-2.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition text-sm cursor-pointer"
+              >
+                إنشاء استطلاع آخر
+              </button>
             </div>
           </div>
-
-          <h1 className="mb-2 text-center text-2xl font-bold text-white">
-            لوحة المسؤول
-          </h1>
-          <p className="mb-8 text-center text-sm text-gray-400">
-            سجل دخولك لإدارة الاستطلاعات
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-6" dir="rtl">
-            <div className="space-y-4">
-              {/* حقل الإيميل */}
-              <div className="relative">
-                <Mail className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+        ) : (
+          <form onSubmit={handleCreatePoll} className="space-y-6">
+            {/* رمز الاستطلاع */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-2">رمز الاستطلاع (Poll Code)</label>
+              <div className="flex gap-2">
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="البريد الإلكتروني"
-                  className="w-full rounded-xl border border-white/10 bg-ink-950/50 py-4 pl-4 pr-12 text-white transition-all focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                  dir="ltr"
-                  style={{ textAlign: 'right' }}
+                  type="text"
+                  value={pollCode}
+                  onChange={(e) => setPollCode(e.target.value)}
+                  placeholder="مثال: 582941"
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
                 />
-              </div>
-
-              {/* حقل كلمة السر */}
-              <div
-                className={`relative transition-transform ${
-                  shake ? 'animate-shake' : ''
-                }`}
-              >
-                <KeyRound className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="كلمة المرور"
-                  className={`w-full rounded-xl border bg-ink-950/50 py-4 pl-4 pr-12 text-white transition-all focus:outline-none ${
-                    error
-                      ? 'border-red-500/50 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50'
-                      : 'border-white/10 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50'
-                  }`}
-                  dir="ltr"
-                  style={{ textAlign: 'right' }}
-                />
+                <button
+                  type="button"
+                  onClick={generateRandomCode}
+                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-4 py-3 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer"
+                >
+                  <KeyRound className="h-4 w-4" /> توليد رمز
+                </button>
               </div>
             </div>
 
-            {error && (
-              <p className="text-center text-sm text-red-400">
-                البيانات غير صحيحة، يرجى المحاولة مرة أخرى.
-              </p>
-            )}
+            {/* المرشح الأول */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+              <h3 className="text-sm font-bold text-emerald-400">المرشح الأول</h3>
+              <input
+                type="text"
+                placeholder="اسم المرشح الأول"
+                value={candidate1Name}
+                onChange={(e) => setCandidate1Name(e.target.value)}
+                required
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+              />
+              <div className="flex items-center gap-4">
+                <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-dashed border-white/20 py-3 rounded-xl cursor-pointer text-xs transition">
+                  <Upload className="h-4 w-4 text-gray-400" />
+                  <span>{candidate1Image ? 'تغيير الصورة' : 'رفع صورة المرشح'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 1)}
+                    className="hidden"
+                  />
+                </label>
+                {candidate1Image && (
+                  <img src={candidate1Image} alt="المرشح 1" className="h-12 w-12 rounded-xl object-cover border border-emerald-500/40" />
+                )}
+              </div>
+            </div>
+
+            {/* المرشح الثاني */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+              <h3 className="text-sm font-bold text-blue-400">المرشح الثاني</h3>
+              <input
+                type="text"
+                placeholder="اسم المرشح الثاني"
+                value={candidate2Name}
+                onChange={(e) => setCandidate2Name(e.target.value)}
+                required
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex items-center gap-4">
+                <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-dashed border-white/20 py-3 rounded-xl cursor-pointer text-xs transition">
+                  <Upload className="h-4 w-4 text-gray-400" />
+                  <span>{candidate2Image ? 'تغيير الصورة' : 'رفع صورة المرشح'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 2)}
+                    className="hidden"
+                  />
+                </label>
+                {candidate2Image && (
+                  <img src={candidate2Image} alt="المرشح 2" className="h-12 w-12 rounded-xl object-cover border border-blue-500/40" />
+                )}
+              </div>
+            </div>
 
             <button
               type="submit"
-              disabled={loading || !email || !password}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-4 font-bold text-white shadow-neon-green transition-all hover:from-emerald-400 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={loading}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-2xl transition flex items-center justify-center gap-2 text-sm cursor-pointer shadow-lg"
             >
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <Lock className="h-5 w-5" />
-                  تسجيل الدخول
-                </>
-              )}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'إنشاء وحفظ الاستطلاع'}
             </button>
           </form>
-        </div>
+        )}
       </div>
     </div>
   );
