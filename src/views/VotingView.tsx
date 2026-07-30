@@ -51,7 +51,6 @@ function isDisposableEmail(email: string): boolean {
   return DISPOSABLE_DOMAINS.has(domain);
 }
 
-
 // 1. نظام الـ Rate Limiting للمستخدم الفردي (منع الضغط السريع المتكرر)
 const VOTE_RATE_LIMIT_MS = 4000; // مهلة 4 ثوانٍ بين المحاولات لنفس المتصفح
 let lastAttemptTime = 0;
