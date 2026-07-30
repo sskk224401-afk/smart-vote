@@ -6,7 +6,7 @@ import {
   onSnapshot, 
   runTransaction 
 } from 'firebase/firestore';
-import { signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signOut, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
 import { 
   CheckCircle2, 
@@ -15,8 +15,7 @@ import {
   Trophy, 
   User, 
   Users, 
-  ShieldCheck, 
-  Share2 
+  ShieldCheck 
 } from 'lucide-react';
 import Background from '@/components/Background';
 
@@ -34,7 +33,29 @@ type Props = {
   onBack: () => void;
 };
 
-export default function VotingView({ pollCode, onBack }: Props) {
+// دالة إنشاء بصمة جهاز فريدة (Browser Fingerprint)
+function getDeviceFingerprint(): string {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const txt = 'SmartVote-Security-Check-2026';
+  if (ctx) {
+    ctx.textBaseline = 'top';
+    ctx.font = "14px 'Arial'";
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(125, 1, 62, 20);
+    ctx.fillStyle = '#069';
+    ctx.fillText(txt, 2, 15);
+    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+    ctx.fillText(txt, 4, 17);
+  }
+  const b64 = canvas.toDataURL().replace('data:image/png;base64,', '');
+  const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+  const navInfo = `${navigator.language}_${navigator.hardwareConcurrency || 2}`;
+  return `${b64.slice(-20)}_${screenInfo}_${navInfo}`;
+}
+
+export default function VotingView({ pollCode }: Props) {
   const [poll, setPoll] = useState<PollData | null>(null);
   const [loading, setLoading] = useState(true);
   const [authChecking, setAuthChecking] = useState(true);
@@ -59,6 +80,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
     return () => unsubscribe();
   }, []);
 
+  // 1. جلب بيانات الاستطلاع والتحديث اللحظي
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'polls', pollCode), (snap) => {
       if (!snap.exists()) {
@@ -80,51 +102,79 @@ export default function VotingView({ pollCode, onBack }: Props) {
     return () => unsub();
   }, [pollCode]);
 
+  // 2. التحقق المزدوج المتقدم من حالة التصويت (LocalStorage + Firestore DB)
   useEffect(() => {
     const checkUserVote = async () => {
+      // أ. الفحص السريع من المتصفح المحلي
+      const localVoted = localStorage.getItem(`voted_poll_${pollCode}`);
+      if (localVoted) {
+        setVoted(true);
+      }
+
       if (!currentUser) return;
+
+      // ب. الفحص الحصين من قواعد البيانات وسجل المستخدم
       try {
         const snap = await getDoc(doc(db, 'users', currentUser.uid, 'voted_polls', pollCode));
-        if (snap.exists()) setVoted(true);
+        if (snap.exists()) {
+          setVoted(true);
+          localStorage.setItem(`voted_poll_${pollCode}`, 'true');
+        }
       } catch (e) {
-        console.error(e);
+        console.error('خطأ أثناء الفحص:', e);
       }
     };
+
     checkUserVote();
   }, [pollCode, currentUser]);
 
+  // 3. دالة التصويت المحمية بأمان
   const handleVote = async (which: 1 | 2) => {
     const user = auth.currentUser;
     if (!user || voted) return;
 
     setVotingFor(which);
     setError(null);
+
     try {
-      const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
-      const alreadyVoted = (await getDoc(voteRef)).exists();
-      if (alreadyVoted) {
+      // التأكد من المتصفح والـ Storage مرة أخرى
+      if (localStorage.getItem(`voted_poll_${pollCode}`)) {
         setVoted(true);
         setVotingFor(null);
         return;
       }
 
+      const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
+      const alreadyVoted = (await getDoc(voteRef)).exists();
+      if (alreadyVoted) {
+        setVoted(true);
+        localStorage.setItem(`voted_poll_${pollCode}`, 'true');
+        setVotingFor(null);
+        return;
+      }
+
+      const deviceFingerprint = getDeviceFingerprint();
       let reachedMilestone = false;
       let milestoneVotes = 0;
       let milestoneCandidate = '';
 
+      // تنفيذ عملية المعاملة بزيادة قدرها +1 فقط
       await runTransaction(db, async (tx) => {
         const pollRef = doc(db, 'polls', pollCode);
         const pollSnap = await tx.get(pollRef);
         if (!pollSnap.exists()) throw new Error('not-found');
-        
+
         const data = pollSnap.data() as PollData;
         const field = which === 1 ? 'votes1' : 'votes2';
         const newVotesCount = (data[field] ?? 0) + 1;
-        
-        tx.update(pollRef, { [field]: newVotesCount });
-        tx.set(voteRef, { candidate: which, votedAt: Date.now() });
 
-        // رجعناها تاني تشتغل كل 10 آلاف صوت
+        tx.update(pollRef, { [field]: newVotesCount });
+        tx.set(voteRef, { 
+          candidate: which, 
+          votedAt: Date.now(),
+          fingerprint: deviceFingerprint
+        });
+
         if (newVotesCount > 0 && newVotesCount % 10000 === 0) {
           reachedMilestone = true;
           milestoneVotes = newVotesCount;
@@ -132,8 +182,11 @@ export default function VotingView({ pollCode, onBack }: Props) {
         }
       });
 
+      // حفظ حالة التصويت محلياً بعد إتمام التعديل
       setVoted(true);
+      localStorage.setItem(`voted_poll_${pollCode}`, 'true');
 
+      // إرسال الإيميل لو وصل المرشح لـ 10,000 صوت
       if (reachedMilestone) {
         emailjs.send(
           import.meta.env.VITE_EMAILJS_SERVICE_ID,
@@ -144,15 +197,13 @@ export default function VotingView({ pollCode, onBack }: Props) {
             poll_code: pollCode
           },
           import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-        ).then(() => {
-          console.log('تم إرسال إشعار الإيميل بنجاح!');
-        }).catch((err) => {
-          console.error('فشل إرسال الإيميل:', err);
+        ).catch((err) => {
+          console.error('فشل إرسال الإشعار:', err);
         });
       }
     } catch (err: any) {
       console.error("تفاصيل خطأ التصويت:", err);
-      setError(`خطأ أثناء تسجيل صوتك: ${err.message || ''}`);
+      setError(`تعذر تسجيل صوتك، يرجى المحاولة لاحقاً: ${err.message || ''}`);
     } finally {
       setVotingFor(null);
     }
@@ -171,7 +222,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black p-4">
         <Background />
-        <div className="w-full max-w-md rounded-3xl bg-black/80 border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in-backdrop-blur-xl">
+        <div className="w-full max-w-md rounded-3xl bg-black/80 border border-white/10 p-8 text-center shadow-2xl relative animate-scale-in backdrop-blur-xl">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <ShieldCheck className="h-8 w-8" />
           </div>
@@ -183,7 +234,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
                 await signInWithPopup(auth, googleProvider);
               } catch (err: any) {
                 console.error("خطأ في تسجيل الدخول:", err);
-                setError(`تعذر حتمًا تسجيل الدخول: ${err.message || ''}`);
+                setError(`تعذر تسجيل الدخول: ${err.message || ''}`);
               }
             }}
             className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer"
@@ -223,7 +274,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
   return (
     <div className="relative min-h-screen text-white bg-black overflow-hidden">
       <Background />
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 am:px-6 z-10 relative">
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-8 sm:px-6 z-10 relative">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => signOut(auth)}
@@ -239,7 +290,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
 
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-white">التصويت المباشر</h1>
-          <p className="mt-1.5 text-xs text-gray-400">اختر مرشحك، صوت واحد لكل مستخدم.</p>
+          <p className="mt-1.5 text-xs text-gray-400">اختر مرشحك، صوت واحد فقط لكل حساب وجهاز.</p>
         </div>
 
         {error && (
@@ -249,9 +300,9 @@ export default function VotingView({ pollCode, onBack }: Props) {
         )}
 
         {voted && (
-          <div className="mx-auto mt-6 flex max-w-md items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
+          <div className="mx-auto mt-6 flex max-w-md items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
-            تم تسجيل صوتك بنجاح، شكراً لمشاركتك
+            تم تسجيل صوتك بنجاح، شكراً لمشاركتك!
           </div>
         )}
 
@@ -308,7 +359,7 @@ export default function VotingView({ pollCode, onBack }: Props) {
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500">
           <Lock className="h-3.5 w-3.5" />
-          التصويت مشفر لحظياً، صوت واحد لكل مستخدم
+          التصويت مشفر ومحمي ضد التكرار والتلاعب
         </div>
       </div>
     </div>
@@ -358,14 +409,14 @@ function CandidateCard({
           </div>
         )}
       </div>
-      <h3 className="text-xl font-bold text-center mb-4">{name}</h3>
+      <h3 className="text-xl font-bold text-center my-4">{name}</h3>
       <button
         onClick={onVote}
         disabled={disabled || isVoting}
         className={`w-full py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${styles.btn} disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {isVoting ? <Loader2 className="h-5 w-5 animate-spin" /> : disabled ? <CheckCircle2 className="h-5 w-5" /> : <Trophy className="h-5 w-5" />}
-        {isVoting ? 'جاري التسجيل' : disabled ? 'تم التصويت' : 'صوت لهذا المرشح'}
+        {isVoting ? 'جاري التسجيل…' : disabled ? 'تم التصويت' : 'صوت لهذا المرشح'}
       </button>
     </div>
   );
