@@ -55,24 +55,35 @@ export default function AdminDashboardView({ onBackHome }: Props) {
     setter({ ...current, image: '', fileName: null });
   };
 
+  const uploadImageToStorage = async (file: File, path: string) => {
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  };
+
   const handleCreate = async () => {
     setError(null);
     if (!c1.name.trim() || !c2.name.trim()) {
       setError('الرجاء إدخال اسمي المرشّحين.');
       return;
     }
-    if (!c1.image || !c2.image) {
+    if (!c1.rawFile || !c2.rawFile) {
       setError('الرجاء رفع صورة لكل مرشّح.');
       return;
     }
     setCreating(true);
     try {
       const code = generatePollCode(5);
+
+      // رفع الصور للـ Storage والحصول على الروابط الفعلية
+      const img1Url = await uploadImageToStorage(c1.rawFile, `polls/${code}/candidate1.jpg`);
+      const img2Url = await uploadImageToStorage(c2.rawFile, `polls/${code}/candidate2.jpg`);
+
       await setDoc(doc(db, 'polls', code), {
         candidate1Name: c1.name.trim(),
-        candidate1Image: c1.image,
+        candidate1Image: img1Url,
         candidate2Name: c2.name.trim(),
-        candidate2Image: c2.image,
+        candidate2Image: img2Url,
         votes1: 0,
         votes2: 0,
         createdAt: Date.now(),
