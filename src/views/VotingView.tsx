@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react';
 import { 
   doc, 
   getDoc, 
+  getDocs,
+  collection,
+  query,
+  where,
   onSnapshot, 
   runTransaction 
 } from 'firebase/firestore';
@@ -33,26 +37,60 @@ type Props = {
   onBack: () => void;
 };
 
-// دالة إنشاء بصمة جهاز فريدة (Browser Fingerprint)
+// قائمة بالنطاقات الشهيرة للإيميلات المؤقتة والوهمية
+const DISPOSABLE_DOMAINS = new Set([
+  'tempmail.com', '10minutemail.com', 'guerrillamail.com', 
+  'dispostable.com', 'mailinator.com', 'trashmail.com', 
+  'temp-mail.org', 'yopmail.com', 'getnada.com', 'maildrop.cc'
+]);
+
+function isDisposableEmail(email: string): boolean {
+  if (!email) return false;
+  const domain = email.split('@')[1]?.toLowerCase();
+  return DISPOSABLE_DOMAINS.has(domain);
+}
+
+// دالة إنشاء بصمة جهاز متطورة وصعبة التزييف (Advanced Browser Fingerprint)
 function getDeviceFingerprint(): string {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  const txt = 'SmartVote-Security-Check-2026';
-  if (ctx) {
-    ctx.textBaseline = 'top';
-    ctx.font = "14px 'Arial'";
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#f60';
-    ctx.fillRect(125, 1, 62, 20);
-    ctx.fillStyle = '#069';
-    ctx.fillText(txt, 2, 15);
-    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-    ctx.fillText(txt, 4, 17);
+  try {
+    // 1. بصمة Canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const txt = 'SmartVote-Fingerprint-v2-2026';
+    let canvasHash = '';
+    if (ctx) {
+      ctx.textBaseline = 'top';
+      ctx.font = "14px 'Arial'";
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText(txt, 2, 15);
+      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+      ctx.fillText(txt, 4, 17);
+      canvasHash = canvas.toDataURL().slice(-30);
+    }
+
+    // 2. بصمة معالج الرسوميات (WebGL Renderer)
+    let glRenderer = '';
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (gl && 'getExtension' in gl) {
+      const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+      if (debugInfo) {
+        glRenderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+      }
+    }
+
+    // 3. معلومات الجهاز والبيئة
+    const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const cores = navigator.hardwareConcurrency || 2;
+    const lang = navigator.language || '';
+
+    const rawFingerprint = `${canvasHash}_${glRenderer}_${screenInfo}_${tz}_${cores}_${lang}`;
+    return btoa(rawFingerprint).slice(-40);
+  } catch (e) {
+    return `fallback_${Date.now()}`;
   }
-  const b64 = canvas.toDataURL().replace('data:image/png;base64,', '');
-  const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
-  const navInfo = `${navigator.language}_${navigator.hardwareConcurrency || 2}`;
-  return `${b64.slice(-20)}_${screenInfo}_${navInfo}`;
 }
 
 export default function VotingView({ pollCode }: Props) {
@@ -103,18 +141,15 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsub();
   }, [pollCode]);
 
-  // 2. التحقق المزدوج المتقدم من حالة التصويت (LocalStorage + Firestore DB)
+  // 2. التحقق المتقدم من حالة التصويت عبر الحساب وقاعدة البيانات
   useEffect(() => {
     const checkUserVote = async () => {
-      // أ. الفحص السريع من المتصفح المحلي
-      const localVoted = localStorage.getItem(`voted_poll_${pollCode}`);
-      if (localVoted) {
+      if (localStorage.getItem(`voted_poll_${pollCode}`)) {
         setVoted(true);
       }
 
       if (!currentUser) return;
 
-      // ب. الفحص الحصين من قواعد البيانات وسجل المستخدم
       try {
         const snap = await getDoc(doc(db, 'users', currentUser.uid, 'voted_polls', pollCode));
         if (snap.exists()) {
@@ -122,14 +157,14 @@ export default function VotingView({ pollCode }: Props) {
           localStorage.setItem(`voted_poll_${pollCode}`, 'true');
         }
       } catch (e) {
-        console.error('خطأ أثناء الفحص:', e);
+        console.error('خطأ أثناء فحص التصويت:', e);
       }
     };
 
     checkUserVote();
   }, [pollCode, currentUser]);
 
-  // 3. دالة التصويت المحمية بأمان
+  // 3. دالة التصويت المحمية بالبصمة والمعاملات الأومية
   const handleVote = async (which: 1 | 2) => {
     const user = auth.currentUser;
     if (!user || voted) return;
@@ -138,29 +173,37 @@ export default function VotingView({ pollCode }: Props) {
     setError(null);
 
     try {
-      // التأكد من المتصفح والـ Storage مرة أخرى
-      if (localStorage.getItem(`voted_poll_${pollCode}`)) {
+      const deviceFingerprint = getDeviceFingerprint();
+
+      // فحص سريع قبل المعاملة للتأكد من وجود التصويت بحساب آخر على نفس الجهاز
+      const fpCheckQuery = query(
+        collection(db, 'votes_fingerprints'),
+        where('pollCode', '==', pollCode),
+        where('fingerprint', '==', deviceFingerprint)
+      );
+      const fpSnap = await getDocs(fpCheckQuery);
+      if (!fpSnap.empty) {
         setVoted(true);
+        localStorage.setItem(`voted_poll_${pollCode}`, 'true');
+        setError('تم التصويت سابقاً من هذا الجهاز.');
         setVotingFor(null);
         return;
       }
 
       const voteRef = doc(db, 'users', user.uid, 'voted_polls', pollCode);
-      const alreadyVoted = (await getDoc(voteRef)).exists();
-      if (alreadyVoted) {
-        setVoted(true);
-        localStorage.setItem(`voted_poll_${pollCode}`, 'true');
-        setVotingFor(null);
-        return;
-      }
+      const fpDocRef = doc(db, 'votes_fingerprints', `${pollCode}_${deviceFingerprint}`);
 
-      const deviceFingerprint = getDeviceFingerprint();
       let reachedMilestone = false;
       let milestoneVotes = 0;
       let milestoneCandidate = '';
 
-      // تنفيذ عملية المعاملة بزيادة قدرها +1 فقط
+      // تنفيذ عملية المعاملة بزيادة +1 والتحقق من القواعد
       await runTransaction(db, async (tx) => {
+        const userVoteSnap = await tx.get(voteRef);
+        if (userVoteSnap.exists()) {
+          throw new Error('voted-already');
+        }
+
         const pollRef = doc(db, 'polls', pollCode);
         const pollSnap = await tx.get(pollRef);
         if (!pollSnap.exists()) throw new Error('not-found');
@@ -175,6 +218,12 @@ export default function VotingView({ pollCode }: Props) {
           votedAt: Date.now(),
           fingerprint: deviceFingerprint
         });
+        tx.set(fpDocRef, {
+          pollCode,
+          fingerprint: deviceFingerprint,
+          uid: user.uid,
+          votedAt: Date.now()
+        });
 
         if (newVotesCount > 0 && newVotesCount % 10000 === 0) {
           reachedMilestone = true;
@@ -183,11 +232,9 @@ export default function VotingView({ pollCode }: Props) {
         }
       });
 
-      // حفظ حالة التصويت محلياً بعد إتمام التعديل
       setVoted(true);
       localStorage.setItem(`voted_poll_${pollCode}`, 'true');
 
-      // إرسال الإيميل لو وصل المرشح لـ 10,000 صوت
       if (reachedMilestone) {
         emailjs.send(
           import.meta.env.VITE_EMAILJS_SERVICE_ID,
@@ -204,7 +251,13 @@ export default function VotingView({ pollCode }: Props) {
       }
     } catch (err: any) {
       console.error("تفاصيل خطأ التصويت:", err);
-      setError(`تعذر تسجيل صوتك، يرجى المحاولة لاحقاً: ${err.message || ''}`);
+      if (err.message === 'voted-already') {
+        setVoted(true);
+        localStorage.setItem(`voted_poll_${pollCode}`, 'true');
+        setError('لقد قمت بالتصويت بالفعل في هذا الاستطلاع.');
+      } else {
+        setError(`تعذر تسجيل صوتك، يرجى المحاولة لاحقاً: ${err.message || ''}`);
+      }
     } finally {
       setVotingFor(null);
     }
@@ -229,7 +282,6 @@ export default function VotingView({ pollCode }: Props) {
           </div>
           <h2 className="text-3xl font-bold mb-6 text-white">سجل في الإنتخابات</h2>
           
-          {/* حقل Cloudflare Turnstile */}
           <div className="flex justify-center mb-6">
             <div 
               className="cf-turnstile" 
@@ -247,8 +299,17 @@ export default function VotingView({ pollCode }: Props) {
                 return;
               }
               try {
+                setError(null);
                 googleProvider.setCustomParameters({ prompt: 'select_account' });
-                await signInWithPopup(auth, googleProvider);
+                
+                const result = await signInWithPopup(auth, googleProvider);
+                const userEmail = result.user.email;
+
+                if (userEmail && isDisposableEmail(userEmail)) {
+                  await signOut(auth);
+                  setError('عذراً، غير مسموح بتسجيل الدخول باستخدام بريد إلكتروني مؤقت.');
+                  return;
+                }
               } catch (err: any) {
                 console.error("خطأ في تسجيل الدخول:", err);
                 setError(`تعذر تسجيل الدخول: ${err.message || ''}`);
