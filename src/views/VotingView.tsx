@@ -37,7 +37,7 @@ type Props = {
   onBack: () => void;
 };
 
-// قائمة بالنطاقات الشهيرة للإيميلات المؤقتة والوهمية
+// قائمة النطاقات الشهيرة للإيميلات المؤقتة
 const DISPOSABLE_DOMAINS = new Set([
   'tempmail.com', '10minutemail.com', 'guerrillamail.com', 
   'dispostable.com', 'mailinator.com', 'trashmail.com', 
@@ -50,10 +50,22 @@ function isDisposableEmail(email: string): boolean {
   return DISPOSABLE_DOMAINS.has(domain);
 }
 
-// دالة إنشاء بصمة جهاز متطورة وصعبة التزييف (Advanced Browser Fingerprint)
+// 1. نظام الـ Rate Limiting للمستخدم الفردي (منع الضغط السريع المتكرر)
+const VOTE_RATE_LIMIT_MS = 4000; // مهلة 4 ثوانٍ بين المحاولات لنفس المتصفح
+let lastAttemptTime = 0;
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  if (now - lastAttemptTime < VOTE_RATE_LIMIT_MS) {
+    return false;
+  }
+  lastAttemptTime = now;
+  return true;
+}
+
+// 2. دالة إنشاء بصمة جهاز متطورة وصعبة التزييف (Advanced Browser Fingerprint)
 function getDeviceFingerprint(): string {
   try {
-    // 1. بصمة Canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const txt = 'SmartVote-Fingerprint-v2-2026';
@@ -70,7 +82,6 @@ function getDeviceFingerprint(): string {
       canvasHash = canvas.toDataURL().slice(-30);
     }
 
-    // 2. بصمة معالج الرسوميات (WebGL Renderer)
     let glRenderer = '';
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (gl && 'getExtension' in gl) {
@@ -80,7 +91,6 @@ function getDeviceFingerprint(): string {
       }
     }
 
-    // 3. معلومات الجهاز والبيئة
     const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     const cores = navigator.hardwareConcurrency || 2;
@@ -119,7 +129,7 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsubscribe();
   }, []);
 
-  // 1. جلب بيانات الاستطلاع والتحديث اللحظي
+  // جلب بيانات الاستطلاع بالتحديث المباشر
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'polls', pollCode), (snap) => {
       if (!snap.exists()) {
@@ -141,7 +151,7 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsub();
   }, [pollCode]);
 
-  // 2. التحقق المتقدم من حالة التصويت عبر الحساب وقاعدة البيانات
+  // فحص حالة تصويت المستخدم من قاعدة البيانات
   useEffect(() => {
     const checkUserVote = async () => {
       if (localStorage.getItem(`voted_poll_${pollCode}`)) {
@@ -164,10 +174,16 @@ export default function VotingView({ pollCode }: Props) {
     checkUserVote();
   }, [pollCode, currentUser]);
 
-  // 3. دالة التصويت المحمية بالبصمة والمعاملات الأومية
+  // دالة التصويت المحمية بالـ Rate Limiting والبصمة والعمليات الأومية
   const handleVote = async (which: 1 | 2) => {
     const user = auth.currentUser;
     if (!user || voted) return;
+
+    // 1. تطبيق فحص الـ Rate Limiting على مستوى العميل
+    if (!checkRateLimit()) {
+      setError('يرجى الانتظار بضع ثوانٍ قبل محاولة التصويت مرة أخرى.');
+      return;
+    }
 
     setVotingFor(which);
     setError(null);
@@ -175,7 +191,7 @@ export default function VotingView({ pollCode }: Props) {
     try {
       const deviceFingerprint = getDeviceFingerprint();
 
-      // فحص سريع قبل المعاملة للتأكد من وجود التصويت بحساب آخر على نفس الجهاز
+      // 2. فحص البصمة المسبقة للجهاز في قاعدة البيانات
       const fpCheckQuery = query(
         collection(db, 'votes_fingerprints'),
         where('pollCode', '==', pollCode),
@@ -197,7 +213,7 @@ export default function VotingView({ pollCode }: Props) {
       let milestoneVotes = 0;
       let milestoneCandidate = '';
 
-      // تنفيذ عملية المعاملة بزيادة +1 والتحقق من القواعد
+      // 3. تنفيذ التعديل المعاملي (Transaction)
       await runTransaction(db, async (tx) => {
         const userVoteSnap = await tx.get(voteRef);
         if (userVoteSnap.exists()) {
