@@ -35,7 +35,7 @@ function generatePollCode(length: number = 5): string {
   return result;
 }
 
-// دالة تصغير الصورة وتحويلها لـ Base64 خفيف جداً وضغطها لعدم إرهاق التخزين
+// دالة تصغير الصورة وتحويلها لـ Base64 خفيف
 function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -47,23 +47,19 @@ function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
-
         canvas.width = width;
         canvas.height = height;
-
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Failed to get canvas context'));
           return;
         }
-
         ctx.drawImage(img, 0, 0, width, height);
-        // تحويل الصورة لـ JPEG بحجم خفيف وجودة ممتازة (0.8)
+        // تحويل الصورة لـ WebP/JPEG بحجم خفيف جداً
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resolve(dataUrl);
       };
@@ -87,9 +83,8 @@ export default function AdminDashboardView({ onBackHome }: Props) {
     setter: React.Dispatch<React.SetStateAction<CandidateForm>>
   ) => {
     if (!file) return;
-
     try {
-      const resizedBase64 = await resizeImageToBase64(file, 500);
+      const resizedBase64 = await resizeImageToBase64(file);
       setter((prev) => ({
         ...prev,
         image: resizedBase64,
@@ -163,13 +158,12 @@ export default function AdminDashboardView({ onBackHome }: Props) {
   return (
     <div className="relative min-h-screen">
       <Background />
-
-      <div className="mx-auto max-w-4xl px-4 pb-20 pt-8 sm:px-6 z-10 relative">
+      <div className="mx-auto max-w-4xl px-4 pb-20 pt-8 sm:px-6">
         {/* Header */}
         <div className="flex items-center justify-between animate-fade-up">
           <button
             onClick={onBackHome}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-white cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
           >
             <ArrowRight className="h-4 w-4" />
             رجوع
@@ -179,18 +173,15 @@ export default function AdminDashboardView({ onBackHome }: Props) {
             لوحة المسؤول
           </span>
         </div>
-
         <div className="mt-6 text-center animate-fade-up">
           <h1 className="text-2xl font-bold text-white sm:text-3xl">إنشاء استطلاع جديد</h1>
           <p className="mt-1.5 text-sm text-gray-500">أدخل بيانات المرشّحين وارفع صورهما لبدء التصويت.</p>
         </div>
-
         {error && (
           <div className="mx-auto mt-6 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300 animate-scale-in">
             {error}
           </div>
         )}
-
         {/* Success screen */}
         {createdCode ? (
           <div className="mx-auto mt-10 max-w-lg animate-scale-in">
@@ -201,24 +192,21 @@ export default function AdminDashboardView({ onBackHome }: Props) {
               </div>
               <h2 className="text-xl font-bold text-white">تم إنشاء الاستطلاع!</h2>
               <p className="mt-2 text-sm text-gray-400">شارك هذا الرمز مع المشاركين:</p>
-
               <div className="mt-5 rounded-xl border border-white/10 bg-ink-950 px-6 py-5">
                 <p className="font-mono text-4xl font-bold tracking-[0.3em] text-emerald-400">
                   {createdCode}
                 </p>
               </div>
-
               <button
                 onClick={copyLink}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-5 py-3.5 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98] cursor-pointer"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-5 py-3.5 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98]"
               >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 {copied ? 'تم النسخ!' : 'نسخ رابط المشاركة'}
               </button>
-
               <button
                 onClick={reset}
-                className="mt-3 text-sm text-gray-500 transition-colors hover:text-white cursor-pointer"
+                className="mt-3 text-sm text-gray-500 transition-colors hover:text-white"
               >
                 إنشاء استطلاع آخر
               </button>
@@ -245,12 +233,11 @@ export default function AdminDashboardView({ onBackHome }: Props) {
                 onClear={() => clearImage(setC2)}
               />
             </div>
-
             <div className="mt-8 flex justify-center">
               <button
                 onClick={handleCreate}
                 disabled={creating}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-8 py-4 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none cursor-pointer"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-8 py-4 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
               >
                 {creating ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -298,11 +285,14 @@ function CandidateInput({
         >
           {index}
         </span>
-        <h3 className={`text-sm font-bold ${color === 'emerald' ? 'text-emerald-400' : 'text-blue-400'}`}>
+        <h3
+          className={`text-sm font-bold ${
+            color === 'emerald' ? 'text-emerald-400' : 'text-blue-400'
+          }`}
+        >
           المرشّح {index === 1 ? 'الأول' : 'الثاني'}
         </h3>
       </div>
-
       {/* Image upload */}
       <div className="mb-4">
         <input
@@ -312,7 +302,7 @@ function CandidateInput({
           onChange={(e) => {
             const file = e.target.files?.[0];
             onImage(file);
-            // إعادة تعيين القيمة لإتاحة إعادة اختيار نفس الصورة إن أردت
+            // إعادة تعيين القيمة ليتمكن المستخدم من إعادة اختيار نفس الصورة إذا أراد
             e.target.value = '';
           }}
           className="hidden"
@@ -322,7 +312,7 @@ function CandidateInput({
             <img src={form.image} alt="معاينة" className="aspect-[4/3] w-full object-cover" />
             <button
               onClick={onClear}
-              className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#0a0a0a]/80 text-white backdrop-blur transition-colors hover:bg-red-500/80 cursor-pointer"
+              className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#0a0a0a]/80 text-white backdrop-blur transition-colors hover:bg-red-500/80"
             >
               <X className="h-4 w-4" />
             </button>
@@ -330,14 +320,13 @@ function CandidateInput({
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 text-gray-600 transition-colors hover:border-white/20 hover:text-gray-400 cursor-pointer"
+            className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 text-gray-600 transition-colors hover:border-white/20 hover:text-gray-400"
           >
             <Upload className="h-7 w-7" />
             <span className="text-xs">رفع صورة (٥٠٠ بكسل)</span>
           </button>
         )}
       </div>
-
       {/* Name */}
       <div>
         <label className="mb-1.5 block text-xs font-medium text-gray-500">اسم المرشّح</label>
