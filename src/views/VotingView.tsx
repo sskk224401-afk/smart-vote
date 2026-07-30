@@ -301,7 +301,7 @@ export default function VotingView({ pollCode }: Props) {
           <div className="flex justify-center mb-6">
             <div 
               className="cf-turnstile" 
-              data-sitekey="YOUR_SITE_KEY" 
+              data-sitekey="0x4AAAAAAECCLdZLlvERKrrM" 
               data-theme="dark"
               data-callback={(token: string) => setTurnstileToken(token)}
             ></div>
