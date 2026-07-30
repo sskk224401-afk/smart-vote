@@ -1,298 +1,707 @@
-import React, { useState } from 'react';
-import { db } from '@/firebase';
+import { useRef, useState } from 'react';
+
 import { doc, setDoc } from 'firebase/firestore';
-import { Trophy, Upload, CheckCircle2, Loader2, KeyRound, Copy, Link as LinkIcon } from 'lucide-react';
+
+import { db } from '@/firebase';
+
+import {
+
+ArrowRight,
+
+Check,
+
+Copy,
+
+Loader2,
+
+Sparkles,
+
+Swords,
+
+Upload,
+
+X,
+
+} from 'lucide-react';
+
 import Background from '@/components/Background';
 
-// دالة ضغط الصور وتحويلها لـ Base64 بدقة عالية وحجم خفيف
-const compressAndConvertToBase64 = (
-  file: File, 
-  maxWidth = 800, 
-  quality = 0.7
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
 
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
 
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
+type Props = {
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+onBackHome: () => void;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('فشل الوصول لـ Canvas context'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressedBase64);
-      };
-
-      img.onerror = (err) => reject(err);
-    };
-
-    reader.onerror = (err) => reject(err);
-  });
 };
 
-export default function AdminDashboardView() {
-  const [pollCode, setPollCode] = useState('');
-  const [candidate1Name, setCandidate1Name] = useState('');
-  const [candidate1Image, setCandidate1Image] = useState('');
-  const [candidate2Name, setCandidate2Name] = useState('');
-  const [candidate2Image, setCandidate2Image] = useState('');
-  
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // دالة التعامل مع رفع واختيار الصور
-  const handleImageUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    candidateNumber: 1 | 2
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    try {
-      setLoading(true);
-      setError(null);
-      const base64 = await compressAndConvertToBase64(file);
-      
-      if (candidateNumber === 1) {
-        setCandidate1Image(base64);
-      } else {
-        setCandidate2Image(base64);
-      }
-    } catch (err) {
-      console.error("خطأ معالجة الصورة:", err);
-      setError('حدث خطأ أثناء معالجة الصورة، حاول اختيار صورة أخرى.');
-    } finally {
-      setLoading(false);
-    }
-  };
+type CandidateForm = {
 
-  // توليد رمز استطلاع عشوائي
-  const generateRandomCode = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setPollCode(code);
-  };
+name: string;
 
-  // حفظ الاستطلاع في Firestore
-  const handleCreatePoll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pollCode || !candidate1Name || !candidate2Name) {
-      setError('يرجى ملء كافة البيانات المطلوبة.');
-      return;
-    }
+image: string;
 
-    try {
-      setLoading(true);
-      setError(null);
+fileName: string | null;
 
-      const pollRef = doc(db, 'polls', pollCode);
-      await setDoc(pollRef, {
-        candidate1Name,
-        candidate1Image,
-        candidate2Name,
-        candidate2Image,
-        votes1: 0,
-        votes2: 0,
-        createdAt: Date.now()
-      });
+};
 
-      setSuccess(true);
-    } catch (err: any) {
-      console.error("خطأ حفظ الاستطلاع:", err);
-      setError(`فشل إنشاء الاستطلاع: ${err.message || ''}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // نسخ الرابط
-  const shareUrl = `${window.location.origin}/?poll=${pollCode}`;
-  const handleCopy = () => {
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
-  return (
-    <div className="relative min-h-screen text-white bg-black p-4 flex items-center justify-center">
-      <Background />
-      
-      <div className="w-full max-w-2xl rounded-3xl bg-black/80 border border-white/10 p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative z-10">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <Trophy className="h-7 w-7" />
-          </div>
-          <h1 className="text-2xl font-bold">إنشاء استطلاع جديد</h1>
-          <p className="text-xs text-gray-400 mt-1">أدخل أسماء وصور المرشحين وسيتم ضغط الصور وحفظها تلقائياً.</p>
-        </div>
+const empty: CandidateForm = { name: '', image: '', fileName: null };
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
-            {error}
-          </div>
-        )}
 
-        {success ? (
-          <div className="text-center py-6 space-y-4">
-            <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto" />
-            <h2 className="text-xl font-bold text-white">تم إنشاء الاستطلاع بنجاح!</h2>
-            
-            <div className="space-y-1">
-              <p className="text-xs text-gray-400">رمز الاستطلاع:</p>
-              <div className="inline-block bg-emerald-500/10 border border-emerald-500/30 px-6 py-2 rounded-2xl font-mono text-2xl font-bold text-emerald-400 tracking-wider">
-                {pollCode}
-              </div>
-            </div>
 
-            {/* مربع الرابط والنسخ */}
-            <div className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 text-right space-y-2">
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-300">
-                <LinkIcon className="h-3.5 w-3.5 text-emerald-400" /> رابط التصويت المباشر:
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={shareUrl}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {copied ? 'تم النسخ!' : 'نسخ الرابط'}
-                </button>
-              </div>
-            </div>
+// دالة توليد كود الاستطلاع المكون من 5 خانات
 
-            <div>
-              <button
-                onClick={() => {
-                  setSuccess(false);
-                  setPollCode('');
-                  setCandidate1Name('');
-                  setCandidate1Image('');
-                  setCandidate2Name('');
-                  setCandidate2Image('');
-                }}
-                className="mt-4 px-6 py-2.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition text-sm cursor-pointer"
-              >
-                إنشاء استطلاع آخر
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleCreatePoll} className="space-y-6">
-            {/* رمز الاستطلاع */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-2">رمز الاستطلاع (Poll Code)</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={pollCode}
-                  onChange={(e) => setPollCode(e.target.value)}
-                  placeholder="مثال: 582941"
-                  required
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={generateRandomCode}
-                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-4 py-3 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer"
-                >
-                  <KeyRound className="h-4 w-4" /> توليد رمز
-                </button>
-              </div>
-            </div>
+function generatePollCode(length: number = 5): string {
 
-            {/* المرشح الأول */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-              <h3 className="text-sm font-bold text-emerald-400">المرشح الأول</h3>
-              <input
-                type="text"
-                placeholder="اسم المرشح الأول"
-                value={candidate1Name}
-                onChange={(e) => setCandidate1Name(e.target.value)}
-                required
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
-              />
-              <div className="flex items-center gap-4">
-                <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-dashed border-white/20 py-3 rounded-xl cursor-pointer text-xs transition">
-                  <Upload className="h-4 w-4 text-gray-400" />
-                  <span>{candidate1Image ? 'تغيير الصورة' : 'رفع صورة المرشح'}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 1)}
-                    className="hidden"
-                  />
-                </label>
-                {candidate1Image && (
-                  <img src={candidate1Image} alt="المرشح 1" className="h-12 w-12 rounded-xl object-cover border border-emerald-500/40" />
-                )}
-              </div>
-            </div>
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
-            {/* المرشح الثاني */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-              <h3 className="text-sm font-bold text-blue-400">المرشح الثاني</h3>
-              <input
-                type="text"
-                placeholder="اسم المرشح الثاني"
-                value={candidate2Name}
-                onChange={(e) => setCandidate2Name(e.target.value)}
-                required
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
-              />
-              <div className="flex items-center gap-4">
-                <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-dashed border-white/20 py-3 rounded-xl cursor-pointer text-xs transition">
-                  <Upload className="h-4 w-4 text-gray-400" />
-                  <span>{candidate2Image ? 'تغيير الصورة' : 'رفع صورة المرشح'}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 2)}
-                    className="hidden"
-                  />
-                </label>
-                {candidate2Image && (
-                  <img src={candidate2Image} alt="المرشح 2" className="h-12 w-12 rounded-xl object-cover border border-blue-500/40" />
-                )}
-              </div>
-            </div>
+let result = '';
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-2xl transition flex items-center justify-center gap-2 text-sm cursor-pointer shadow-lg"
-            >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'إنشاء وحفظ الاستطلاع'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
+for (let i = 0; i < length; i++) {
+
+result += chars.charAt(Math.floor(Math.random() * chars.length));
+
 }
+
+return result;
+
+}
+
+
+
+// دالة تصغير الصورة وتحويلها لـ Base64 خفيف
+
+function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string> {
+
+return new Promise((resolve, reject) => {
+
+const reader = new FileReader();
+
+reader.readAsDataURL(file);
+
+reader.onload = (event) => {
+
+const img = new Image();
+
+img.src = event.target?.result as string;
+
+img.onload = () => {
+
+const canvas = document.createElement('canvas');
+
+let width = img.width;
+
+let height = img.height;
+
+
+
+if (width > maxWidth) {
+
+height = Math.round((height * maxWidth) / width);
+
+width = maxWidth;
+
+}
+
+
+
+canvas.width = width;
+
+canvas.height = height;
+
+
+
+const ctx = canvas.getContext('2d');
+
+if (!ctx) {
+
+reject(new Error('Failed to get canvas context'));
+
+return;
+
+}
+
+
+
+ctx.drawImage(img, 0, 0, width, height);
+
+// تحويل الصورة لـ WebP/JPEG بحجم خفيف جداً
+
+const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+resolve(dataUrl);
+
+};
+
+img.onerror = (err) => reject(err);
+
+};
+
+reader.onerror = (err) => reject(err);
+
+});
+
+}
+
+
+
+export default function AdminDashboardView({ onBackHome }: Props) {
+
+const [c1, setC1] = useState<CandidateForm>(empty);
+
+const [c2, setC2] = useState<CandidateForm>(empty);
+
+const [creating, setCreating] = useState(false);
+
+const [error, setError] = useState<string | null>(null);
+
+const [createdCode, setCreatedCode] = useState<string | null>(null);
+
+const [copied, setCopied] = useState(false);
+
+
+
+// دالة التعامل مع رفع واختيار الصورة
+
+const handleImage = async (
+
+file: File | undefined,
+
+setter: React.Dispatch<React.SetStateAction<CandidateForm>>
+
+) => {
+
+if (!file) return;
+
+
+
+try {
+
+const resizedBase64 = await resizeImageToBase64(file);
+
+setter((prev) => ({
+
+...prev,
+
+image: resizedBase64,
+
+fileName: file.name,
+
+}));
+
+setError(null);
+
+} catch (err) {
+
+console.error(err);
+
+setError('تعذّر معالجة الصورة. حاول بصورة أخرى.');
+
+}
+
+};
+
+
+
+// دالة مسح الصورة المرفوعة
+
+const clearImage = (
+
+setter: React.Dispatch<React.SetStateAction<CandidateForm>>
+
+) => {
+
+setter((prev) => ({
+
+...prev,
+
+image: '',
+
+fileName: null,
+
+}));
+
+};
+
+
+
+// دالة حفظ الاستطلاع في Firestore
+
+const handleCreate = async () => {
+
+setError(null);
+
+if (!c1.name.trim() || !c2.name.trim()) {
+
+setError('الرجاء إدخال اسمي المرشّحين.');
+
+return;
+
+}
+
+if (!c1.image || !c2.image) {
+
+setError('الرجاء رفع صورة لكل مرشّح.');
+
+return;
+
+}
+
+setCreating(true);
+
+try {
+
+const code = generatePollCode(5);
+
+await setDoc(doc(db, 'polls', code), {
+
+candidate1Name: c1.name.trim(),
+
+candidate1Image: c1.image,
+
+candidate2Name: c2.name.trim(),
+
+candidate2Image: c2.image,
+
+votes1: 0,
+
+votes2: 0,
+
+createdAt: Date.now(),
+
+});
+
+setCreatedCode(code);
+
+} catch (err) {
+
+console.error(err);
+
+setError('تعذّر إنشاء الاستطلاع. حاول مرة أخرى.');
+
+} finally {
+
+setCreating(false);
+
+}
+
+};
+
+
+
+const copyLink = () => {
+
+if (!createdCode) return;
+
+const link = `${window.location.origin}/?poll=${createdCode}`;
+
+navigator.clipboard.writeText(link);
+
+setCopied(true);
+
+setTimeout(() => setCopied(false), 2000);
+
+};
+
+
+
+const reset = () => {
+
+setCreatedCode(null);
+
+setC1(empty);
+
+setC2(empty);
+
+setCopied(false);
+
+};
+
+
+
+return (
+
+<div className="relative min-h-screen">
+
+<Background />
+
+
+
+<div className="mx-auto max-w-4xl px-4 pb-20 pt-8 sm:px-6">
+
+{/* Header */}
+
+<div className="flex items-center justify-between animate-fade-up">
+
+<button
+
+onClick={onBackHome}
+
+className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+
+>
+
+<ArrowRight className="h-4 w-4" />
+
+رجوع
+
+</button>
+
+<span className="flex items-center gap-1.5 rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs font-medium text-blue-300">
+
+<Sparkles className="h-3.5 w-3.5" />
+
+لوحة المسؤول
+
+</span>
+
+</div>
+
+
+
+<div className="mt-6 text-center animate-fade-up">
+
+<h1 className="text-2xl font-bold text-white sm:text-3xl">إنشاء استطلاع جديد</h1>
+
+<p className="mt-1.5 text-sm text-gray-500">أدخل بيانات المرشّحين وارفع صورهما لبدء التصويت.</p>
+
+</div>
+
+
+
+{error && (
+
+<div className="mx-auto mt-6 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300 animate-scale-in">
+
+{error}
+
+</div>
+
+)}
+
+
+
+{/* Success screen */}
+
+{createdCode ? (
+
+<div className="mx-auto mt-10 max-w-lg animate-scale-in">
+
+<div className="relative overflow-hidden rounded-2xl border border-emerald-400/30 glass p-8 text-center shadow-2xl">
+
+<div className="absolute -inset-px -z-10 rounded-2xl bg-gradient-to-b from-emerald-400/20 to-transparent blur" />
+
+<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 ring-1 ring-emerald-400/30">
+
+<Check className="h-8 w-8 text-emerald-300" />
+
+</div>
+
+<h2 className="text-xl font-bold text-white">تم إنشاء الاستطلاع!</h2>
+
+<p className="mt-2 text-sm text-gray-400">شارك هذا الرمز مع المشاركين:</p>
+
+
+
+<div className="mt-5 rounded-xl border border-white/10 bg-ink-950 px-6 py-5">
+
+<p className="font-mono text-4xl font-bold tracking-[0.3em] text-emerald-400">
+
+{createdCode}
+
+</p>
+
+</div>
+
+
+
+<button
+
+onClick={copyLink}
+
+className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-5 py-3.5 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98]"
+
+>
+
+{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+
+{copied ? 'تم النسخ!' : 'نسخ رابط المشاركة'}
+
+</button>
+
+
+
+<button
+
+onClick={reset}
+
+className="mt-3 text-sm text-gray-500 transition-colors hover:text-white"
+
+>
+
+إنشاء استطلاع آخر
+
+</button>
+
+</div>
+
+</div>
+
+) : (
+
+/* Create form */
+
+<div className="mt-8 animate-fade-up">
+
+<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
+<CandidateInput
+
+index={1}
+
+color="emerald"
+
+form={c1}
+
+setForm={setC1}
+
+onImage={(f) => handleImage(f, setC1)}
+
+onClear={() => clearImage(setC1)}
+
+/>
+
+<CandidateInput
+
+index={2}
+
+color="blue"
+
+form={c2}
+
+setForm={setC2}
+
+onImage={(f) => handleImage(f, setC2)}
+
+onClear={() => clearImage(setC2)}
+
+/>
+
+</div>
+
+
+
+<div className="mt-8 flex justify-center">
+
+<button
+
+onClick={handleCreate}
+
+disabled={creating}
+
+className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-600 px-8 py-4 text-sm font-bold text-[#0a0a0a] shadow-neon-green transition-all hover:shadow-neon-green-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+
+>
+
+{creating ? (
+
+<Loader2 className="h-5 w-5 animate-spin" />
+
+) : (
+
+<Swords className="h-5 w-5" />
+
+)}
+
+{creating ? 'جارٍ الإنشاء…' : 'إنشاء الاستطلاع'}
+
+</button>
+
+</div>
+
+</div>
+
+)}
+
+</div>
+
+</div>
+
+);
+
+}
+
+
+
+function CandidateInput({
+
+index,
+
+color,
+
+form,
+
+setForm,
+
+onImage,
+
+onClear,
+
+}: {
+
+index: number;
+
+color: 'emerald' | 'blue';
+
+form: CandidateForm;
+
+setForm: React.Dispatch<React.SetStateAction<CandidateForm>>;
+
+onImage: (f: File | undefined) => void;
+
+onClear: () => void;
+
+}) {
+
+const fileRef = useRef<HTMLInputElement>(null);
+
+const accent =
+
+color === 'emerald'
+
+? 'text-emerald-400 border-emerald-400/30'
+
+: 'text-blue-400 border-blue-400/30';
+
+
+
+return (
+
+<div className={`rounded-2xl border bg-ink-900/40 p-5 ${accent}`}>
+
+<div className="mb-4 flex items-center gap-2">
+
+<span
+
+className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-[#0a0a0a] ${
+
+color === 'emerald' ? 'bg-emerald-400' : 'bg-blue-400'
+
+}`}
+
+>
+
+{index}
+
+</span>
+
+<h3 className={`text-sm font-bold ${color === 'emerald' ? 'text-emerald-400' : 'text-blue-400'}`}>
+
+المرشّح {index === 1 ? 'الأول' : 'الثاني'}
+
+</h3>
+
+</div>
+
+
+
+{/* Image upload */}
+
+<div className="mb-4">
+
+<input
+
+ref={fileRef}
+
+type="file"
+
+accept="image/*"
+
+onChange={(e) => {
+
+const file = e.target.files?.[0];
+
+onImage(file);
+
+// إعادت تعيين القيمة ليتمكن المستخدم من إعادة اختيار نفس الصورة إذا أراد
+
+e.target.value = '';
+
+}}
+
+className="hidden"
+
+/>
+
+{form.image ? (
+
+<div className="group relative overflow-hidden rounded-xl border border-white/10">
+
+<img src={form.image} alt="معاينة" className="aspect-[4/3] w-full object-cover" />
+
+<button
+
+onClick={onClear}
+
+className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#0a0a0a]/80 text-white backdrop-blur transition-colors hover:bg-red-500/80"
+
+>
+
+<X className="h-4 w-4" />
+
+</button>
+
+</div>
+
+) : (
+
+<button
+
+onClick={() => fileRef.current?.click()}
+
+className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 text-gray-600 transition-colors hover:border-white/20 hover:text-gray-400"
+
+>
+
+<Upload className="h-7 w-7" />
+
+<span className="text-xs">رفع صورة (٥٠٠ بكسل)</span>
+
+</button>
+
+)}
+
+</div>
+
+
+
+{/* Name */}
+
+<div>
+
+<label className="mb-1.5 block text-xs font-medium text-gray-500">اسم المرشّح</label>
+
+<input
+
+type="text"
+
+value={form.name}
+
+onChange={(e) => setForm({ ...form, name: e.target.value })}
+
+placeholder="مثال: أحمد محمد"
+
+className="w-full rounded-xl border border-white/10 bg-ink-950 px-4 py-3 text-sm text-white placeholder-gray-700 outline-none transition-colors focus:border-white/20"
+
+/>
+
+</div>
+
+</div>
+
+);
+
+} 
