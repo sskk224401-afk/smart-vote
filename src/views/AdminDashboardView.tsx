@@ -1,14 +1,11 @@
 import { useRef, useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/firebase';
+import { db } from '@/firebase';
 import {
   ArrowRight,
   Check,
   Copy,
-  Image as ImageIcon,
   Loader2,
-  Plus,
   Sparkles,
   Swords,
   Upload,
@@ -28,6 +25,54 @@ type CandidateForm = {
 
 const empty: CandidateForm = { name: '', image: '', fileName: null };
 
+// دالة توليد كود الاستطلاع المكون من 5 خانات
+function generatePollCode(length: number = 5): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// دالة تصغير الصورة وتحويلها لـ Base64 خفيف
+function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // تحويل الصورة لـ WebP/JPEG بحجم خفيف جداً
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+}
+
 export default function AdminDashboardView({ onBackHome }: Props) {
   const [c1, setC1] = useState<CandidateForm>(empty);
   const [c2, setC2] = useState<CandidateForm>(empty);
@@ -36,11 +81,11 @@ export default function AdminDashboardView({ onBackHome }: Props) {
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleImageChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
+  // دالة التعامل مع رفع واختيار الصورة
+  const handleImage = async (
+    file: File | undefined,
     setter: React.Dispatch<React.SetStateAction<CandidateForm>>
   ) => {
-    const file = e.target.files?.[0];
     if (!file) return;
 
     try {
@@ -57,6 +102,18 @@ export default function AdminDashboardView({ onBackHome }: Props) {
     }
   };
 
+  // دالة مسح الصورة المرفوعة
+  const clearImage = (
+    setter: React.Dispatch<React.SetStateAction<CandidateForm>>
+  ) => {
+    setter((prev) => ({
+      ...prev,
+      image: '',
+      fileName: null,
+    }));
+  };
+
+  // دالة حفظ الاستطلاع في Firestore
   const handleCreate = async () => {
     setError(null);
     if (!c1.name.trim() || !c2.name.trim()) {
@@ -176,16 +233,16 @@ export default function AdminDashboardView({ onBackHome }: Props) {
                 color="emerald"
                 form={c1}
                 setForm={setC1}
-                onImage={(f) => handleImage(f, setC1, c1)}
-                onClear={() => clearImage(setC1, c1)}
+                onImage={(f) => handleImage(f, setC1)}
+                onClear={() => clearImage(setC1)}
               />
               <CandidateInput
                 index={2}
                 color="blue"
                 form={c2}
                 setForm={setC2}
-                onImage={(f) => handleImage(f, setC2, c2)}
-                onClear={() => clearImage(setC2, c2)}
+                onImage={(f) => handleImage(f, setC2)}
+                onClear={() => clearImage(setC2)}
               />
             </div>
 
@@ -221,7 +278,7 @@ function CandidateInput({
   index: number;
   color: 'emerald' | 'blue';
   form: CandidateForm;
-  setForm: (c: CandidateForm) => void;
+  setForm: React.Dispatch<React.SetStateAction<CandidateForm>>;
   onImage: (f: File | undefined) => void;
   onClear: () => void;
 }) {
@@ -252,7 +309,12 @@ function CandidateInput({
           ref={fileRef}
           type="file"
           accept="image/*"
-          onChange={(e) => onImage(e.target.files?.[0])}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            onImage(file);
+            // إعادت تعيين القيمة ليتمكن المستخدم من إعادة اختيار نفس الصورة إذا أراد
+            e.target.value = '';
+          }}
           className="hidden"
         />
         {form.image ? (
