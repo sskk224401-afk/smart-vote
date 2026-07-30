@@ -36,17 +36,24 @@ export default function AdminDashboardView({ onBackHome }: Props) {
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleImage = async (
-    file: File | undefined,
-    setter: (c: CandidateForm) => void,
-    current: CandidateForm,
+  const handleImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<CandidateForm>>
   ) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    setError(null);
+
     try {
-      const base64 = await resizeImageToBase64(file, 500, 0.85);
-      setter({ ...current, image: base64, fileName: file.name });
-    } catch {
+      const resizedBase64 = await resizeImageToBase64(file);
+      setter((prev) => ({
+        ...prev,
+        rawFile: file,
+        image: resizedBase64,
+        fileName: file.name,
+      }));
+      setError(null);
+    } catch (err) {
+      console.error(err);
       setError('تعذّر معالجة الصورة. حاول بصورة أخرى.');
     }
   };
