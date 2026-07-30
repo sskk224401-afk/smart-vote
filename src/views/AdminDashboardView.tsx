@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '@/firebase';
-import { generatePollCode, resizeImageToBase64 } from '@/lib/poll';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/firebase';
 import {
   ArrowRight,
   Check,
@@ -78,13 +78,14 @@ export default function AdminDashboardView({ onBackHome }: Props) {
         createdAt: Date.now(),
       });
       setCreatedCode(code);
-    } catch {
+    } catch (err) {
+      console.error(err);
       setError('تعذّر إنشاء الاستطلاع. حاول مرة أخرى.');
     } finally {
       setCreating(false);
     }
   };
-
+  
   const copyLink = () => {
     if (!createdCode) return;
     const link = `${window.location.origin}/?poll=${createdCode}`;
