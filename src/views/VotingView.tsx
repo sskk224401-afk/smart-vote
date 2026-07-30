@@ -11,8 +11,8 @@ import {
   runTransaction 
 } from 'firebase/firestore';
 import { signOut, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
-import { auth, db, googleProvider } from '@/firebase';
-import { redis } from '@/lib/redis'; // ربط ملف إعدادات Upstash Redis
+import { auth, db, googleProvider } from '../firebase';
+import { redis } from '../lib/redis';
 import { 
   CheckCircle2, 
   Loader2, 
@@ -22,7 +22,7 @@ import {
   Users, 
   ShieldCheck 
 } from 'lucide-react';
-import Background from '@/components/Background';
+import Background from '../components/Background';
 
 type PollData = {
   candidate1Name: string;
