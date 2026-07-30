@@ -2,7 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyD6aizjkqi1EmVCJuanBtfeyCtvfv2cBpQ';
+// التعديل هنا: الاعتماد فقط على المتغير البيئي الآمن
+const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 
 const firebaseConfig = {
   apiKey: apiKey,
