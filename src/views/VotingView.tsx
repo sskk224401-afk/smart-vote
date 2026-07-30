@@ -63,6 +63,7 @@ export default function VotingView({ pollCode }: Props) {
   const [votingFor, setVotingFor] = useState<1 | 2 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     const enforceFreshLogin = async () => {
@@ -226,9 +227,25 @@ export default function VotingView({ pollCode }: Props) {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <ShieldCheck className="h-8 w-8" />
           </div>
-          <h2 className="text-3xl font-bold mb-8 text-white">سجل في الإنتخابات</h2>         
+          <h2 className="text-3xl font-bold mb-6 text-white">سجل في الإنتخابات</h2>
+          
+          {/* حقل Cloudflare Turnstile */}
+          <div className="flex justify-center mb-6">
+            <div 
+              className="cf-turnstile" 
+              data-sitekey="YOUR_SITE_KEY" 
+              data-theme="dark"
+              data-callback={(token: string) => setTurnstileToken(token)}
+            ></div>
+          </div>
+
           <button
+            disabled={!turnstileToken}
             onClick={async () => {
+              if (!turnstileToken) {
+                setError('يرجى إكمال فحص الأمان أولاً.');
+                return;
+              }
               try {
                 googleProvider.setCustomParameters({ prompt: 'select_account' });
                 await signInWithPopup(auth, googleProvider);
@@ -237,7 +254,7 @@ export default function VotingView({ pollCode }: Props) {
                 setError(`تعذر تسجيل الدخول: ${err.message || ''}`);
               }
             }}
-            className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-black hover:bg-gray-100 py-3.5 px-4 font-bold transition shadow-lg text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M23.5 12.27c0-.82-.07-1.64-.21-2.43H12v4.63h6.51c-.28 1.48-1.12 2.73-2.4 3.58v2.97h3.88c2.27-2.09 3.51-5.17 3.51-8.75z" />
