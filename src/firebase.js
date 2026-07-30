@@ -2,8 +2,10 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyD6aizjkqi1EmVCJuanBtfeyCtvfv2cBpQ';
+
 const firebaseConfig = {
-  apiKey: 'AIzaSyD6aizjkqi1EmVCJuanBtfeyCtvfv2cBpQ',
+  apiKey: apiKey,
   authDomain: 'smartvote-8c980.firebaseapp.com',
   projectId: 'smartvote-8c980',
   storageBucket: 'smartvote-8c980.firebasestorage.app',

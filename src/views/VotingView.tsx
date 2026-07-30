@@ -136,14 +136,14 @@ export default function VotingView({ pollCode, onBack }: Props) {
 
       if (reachedMilestone) {
         emailjs.send(
-          'service_hjcm4oi',
-          'template_qvqjc5z',
+          import.meta.env.VITE_EMAILJS_SERVICE_ID,
+          import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
           {
             candidate_name: milestoneCandidate,
             vote_count: milestoneVotes,
             poll_code: pollCode
           },
-          'OFElPX-mMUfZLyWMF'
+          import.meta.env.VITE_EMAILJS_PUBLIC_KEY
         ).then(() => {
           console.log('تم إرسال إشعار الإيميل بنجاح!');
         }).catch((err) => {

@@ -1,8 +1,10 @@
 export function generatePollCode(length = 5): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
   let out = '';
   for (let i = 0; i < length; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
+    out += chars[array[i] % chars.length];
   }
   return out;
 }
