@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { signOut, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider } from '@/firebase';
+import { redis } from '@/lib/redis'; // ربط ملف إعدادات Upstash Redis
 import { 
   CheckCircle2, 
   Loader2, 
@@ -150,7 +151,7 @@ export default function VotingView({ pollCode }: Props) {
     return () => unsub();
   }, [pollCode]);
 
-  // فحص حالة تصويت المستخدم من قاعدة البيانات
+  // فحص حالة تصويت المستخدم من قاعدة البيانات المباشرة
   useEffect(() => {
     const checkUserVote = async () => {
       if (localStorage.getItem(`voted_poll_${pollCode}`)) {
@@ -173,7 +174,7 @@ export default function VotingView({ pollCode }: Props) {
     checkUserVote();
   }, [pollCode, currentUser]);
 
-  // دالة التصويت المحمية بالـ Rate Limiting والبصمة والعمليات الأومية
+  // دالة التصويت المحمية بـ Redis + Firebase Rate Limiting والبصمة والعمليات الأومية
   const handleVote = async (which: 1 | 2) => {
     const user = auth.currentUser;
     if (!user || voted) return;
@@ -190,7 +191,19 @@ export default function VotingView({ pollCode }: Props) {
     try {
       const deviceFingerprint = getDeviceFingerprint();
 
-      // 2. فحص البصمة المسبقة للجهاز في قاعدة البيانات
+      // 2. التحقق السريع وعالي الأداء عن طريق Upstash Redis (مستوى المستخدم والـ Fingerprint)
+      const redisUserAdded = await redis.sadd(`poll:${pollCode}:voted_users`, user.uid);
+      const redisFpAdded = await redis.sadd(`poll:${pollCode}:voted_fingerprints`, deviceFingerprint);
+
+      if (redisUserAdded === 0 || redisFpAdded === 0) {
+        setVoted(true);
+        localStorage.setItem(`voted_poll_${pollCode}`, 'true');
+        setError('تم التصويت سابقاً من هذا الحساب أو الجهاز.');
+        setVotingFor(null);
+        return;
+      }
+
+      // 3. فحص البصمة المسبقة للجهاز في Firebase للتحقق المزدوج
       const fpCheckQuery = query(
         collection(db, 'votes_fingerprints'),
         where('pollCode', '==', pollCode),
@@ -212,7 +225,7 @@ export default function VotingView({ pollCode }: Props) {
       let milestoneVotes = 0;
       let milestoneCandidate = '';
 
-      // 3. تنفيذ التعديل المعاملي (Transaction)
+      // 4. تنفيذ التعديل المعاملي في Firebase (Transaction)
       await runTransaction(db, async (tx) => {
         const userVoteSnap = await tx.get(voteRef);
         if (userVoteSnap.exists()) {
@@ -246,6 +259,9 @@ export default function VotingView({ pollCode }: Props) {
           milestoneCandidate = which === 1 ? data.candidate1Name : data.candidate2Name;
         }
       });
+
+      // 5. زيادة العداد على Upstash Redis أيضاً للتتبع السريع
+      await redis.incr(`poll:${pollCode}:candidate:${which}`);
 
       setVoted(true);
       localStorage.setItem(`voted_poll_${pollCode}`, 'true');
