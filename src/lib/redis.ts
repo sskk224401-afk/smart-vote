@@ -4,7 +4,7 @@ const url = import.meta.env.VITE_UPSTASH_REDIS_REST_URL;
 const token = import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN;
 
 if (!url || !token) {
-  console.error('تنبيه: قيم Upstash Redis غير معرفة في ملف .env!');
+  console.error('خطأ أمني: بيانات اتصال Redis غير معرفة في متغيرات البيئة الآمنة .env');
 }
 
 export const redis = new Redis({
