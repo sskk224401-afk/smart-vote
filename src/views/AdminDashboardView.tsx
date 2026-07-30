@@ -47,7 +47,6 @@ export default function AdminDashboardView({ onBackHome }: Props) {
       const resizedBase64 = await resizeImageToBase64(file);
       setter((prev) => ({
         ...prev,
-        rawFile: file,
         image: resizedBase64,
         fileName: file.name,
       }));
@@ -56,10 +55,6 @@ export default function AdminDashboardView({ onBackHome }: Props) {
       console.error(err);
       setError('تعذّر معالجة الصورة. حاول بصورة أخرى.');
     }
-  };
-
-  const clearImage = (setter: (c: CandidateForm) => void, current: CandidateForm) => {
-    setter({ ...current, image: '', fileName: null });
   };
 
   const handleCreate = async () => {
@@ -92,7 +87,7 @@ export default function AdminDashboardView({ onBackHome }: Props) {
       setCreating(false);
     }
   };
-  
+
   const copyLink = () => {
     if (!createdCode) return;
     const link = `${window.location.origin}/?poll=${createdCode}`;
