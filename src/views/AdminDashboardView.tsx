@@ -35,8 +35,8 @@ function generatePollCode(length: number = 5): string {
   return result;
 }
 
-// دالة تصغير الصورة وتحويلها لـ Base64 خفيف
-function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string> {
+// دالة تصغير الصورة وتحويلها لـ Base64 خفيف جداً مع الحفاظ على أقصى وضوح
+function resizeImageToBase64(file: File, maxWidth: number = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -47,19 +47,28 @@ function resizeImageToBase64(file: File, maxWidth: number = 500): Promise<string
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
+        
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
+        
         canvas.width = width;
         canvas.height = height;
+        
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Failed to get canvas context'));
           return;
         }
+
+        // إضافة خلفية بيضاء لتجنب تحول الصور الشفافة (PNG) إلى خلفية سوداء
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        
         ctx.drawImage(img, 0, 0, width, height);
-        // تحويل الصورة لـ WebP/JPEG بحجم خفيف جداً
+        
+        // تحويل الصورة لـ JPEG بجودة 80% (تضمن وضوح عالي جداً للعين وحجم صغير جداً لقاعدة البيانات)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resolve(dataUrl);
       };
@@ -323,7 +332,7 @@ function CandidateInput({
             className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 text-gray-600 transition-colors hover:border-white/20 hover:text-gray-400"
           >
             <Upload className="h-7 w-7" />
-            <span className="text-xs">رفع صورة (٥٠٠ بكسل)</span>
+            <span className="text-xs">رفع صورة (٨٠٠ بكسل)</span>
           </button>
         )}
       </div>
